@@ -1,28 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'features/dashboard/dashboard_screen.dart';
+import 'app/v_expense_app.dart';
+import 'core/settings/settings_providers.dart';
 
-void main() {
-  runApp(const VExpenseApp());
-}
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
 
-class VExpenseApp extends StatelessWidget {
-  const VExpenseApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'V Expense',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF4CAF50),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      home: const DashboardScreen(),
-    );
-  }
+  runApp(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const VExpenseApp(),
+    ),
+  );
 }
