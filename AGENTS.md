@@ -51,6 +51,12 @@ flutter build apk --debug
 - Build APK = `flutter build apk --debug --no-pub` (pakai `--no-pub` biar gak nunggu pub get)
 - `flutter run` butuh device — di VPS headless pakai `flutter build` aja
 
+## Fix bug = PATCH ONLY (wajib, FE & BE)
+- Bug fix: targeted edit minimal, JANGAN rewrite/refactor ulang 1 file penuh.
+- Root cause: satu guard di shared function > guard di tiap caller.
+- Commit per fix: `fix: <deskripsi>` — terpisah dari task lain.
+- Regresi → revert commit itu, bukan lanjut tambal.
+
 ## Git
 - Repo: GitHub `sandacof003/vexpense` (branch main)
 - Jangan commit `build/`, `.dart_tool/`, `android/local.properties`, `android/.gradle/` (sudah di .gitignore)
