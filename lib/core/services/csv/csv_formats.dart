@@ -41,8 +41,10 @@ const Map<String, int> kCurrencyMinorUnits = <String, int>{
 /// - Skala mengikuti minor unit currency: `25000` IDR -> 25000, bukan 2500000.
 /// - Digit di luar minor unit dibulatkan half-up (`25000.50` IDR -> 25001).
 /// - Aritmetika integer, tidak lewat `double` (menghindari galat pembulatan).
-/// - Tanda negatif `-` atau dalam kurung `(1500)` dianggap pengeluaran
-///   (nilai dikembalikan positif + flag [isNegative]).
+/// - Tanda negatif `-` atau dalam kurung `(1500)` dideteksi dan dikembalikan
+///   lewat flag [isNegative]; [minorUnits] tetap magnitudo positif.
+///   Kontrak baris CSV: `CsvImportParser` menolak baris bertanda negatif
+///   (`invalidSign`) karena arah transaksi ditentukan kolom `Type`, bukan sign.
 class CsvNumberParser {
   const CsvNumberParser({
     this.minorUnitsByCurrency = kCurrencyMinorUnits,

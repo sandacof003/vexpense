@@ -201,6 +201,68 @@ void main() {
       expect(result.errors.first.code, CsvImportErrorCode.invalidAmount);
     });
 
+    test('income negatif -> row error invalidSign, tidak tersimpan', () {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,income,Gaji,BCA,-5000000,IDR,';
+      final result = parser.parse(csv);
+      expect(result.rows, isEmpty);
+      expect(result.errors, hasLength(1));
+      expect(result.errors.single.code, CsvImportErrorCode.invalidSign);
+      expect(result.errors.single.rowNumber, 1);
+      expect(result.errors.single.column, 'Amount');
+      expect(result.errors.single.message, contains('income'));
+    });
+
+    test('expense negatif -> row error invalidSign, tidak tersimpan', () {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,expense,Makan,Cash,-25000,IDR,lunch';
+      final result = parser.parse(csv);
+      expect(result.rows, isEmpty);
+      expect(result.errors.single.code, CsvImportErrorCode.invalidSign);
+      expect(result.errors.single.message, contains('expense'));
+    });
+
+    test('transfer negatif -> row error invalidSign', () {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,transfer,,BCA,-25000,IDR,';
+      final result = parser.parse(csv);
+      expect(result.rows, isEmpty);
+      expect(result.errors.single.code, CsvImportErrorCode.invalidSign);
+    });
+
+    test('tanda negatif dalam kurung juga ditolak', () {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,expense,Makan,Cash,"(25000)",IDR,';
+      final result = parser.parse(csv);
+      expect(result.rows, isEmpty);
+      expect(result.errors.single.code, CsvImportErrorCode.invalidSign);
+    });
+
+    test('nominal nol -> zeroAmount (guard kini benar-benar kena)', () {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,expense,Makan,Cash,0,IDR,';
+      final result = parser.parse(csv);
+      expect(result.rows, isEmpty);
+      expect(result.errors.single.code, CsvImportErrorCode.zeroAmount);
+    });
+
+    test('baris valid lain tidak ikut tertolak saat ada baris negatif', () {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,income,Gaji,BCA,-5000000,IDR,\n'
+          '2024-01-16,expense,Makan,Cash,25000,IDR,ok';
+      final result = parser.parse(csv);
+      expect(result.rows, hasLength(1));
+      expect(result.rows.single.amountMinorUnit, 25000);
+      expect(result.rows.single.type, 'expense');
+      expect(result.errors.single.rowNumber, 1);
+    });
+
     test('baris invalid: tipe tidak dikenal', () {
       const csv =
           'Date,Type,Category,Account,Amount,Currency,Note\n'
@@ -346,6 +408,29 @@ void main() {
       expect(result.summary.invalidRows, 1);
       expect(result.rows, hasLength(1));
       expect(result.errors, hasLength(1));
+    });
+
+    test('baris sign salah -> invalid, tidak tersimpan', () {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,income,Gaji,BCA,-5000000,IDR,\n'
+          '2024-01-15,expense,Makan,Cash,-25000,IDR,\n'
+          '2024-01-16,expense,Makan,Cash,25000,IDR,ok';
+      final result = service.importBytes(
+        bytes: utf8.encode(csv),
+        fileName: 'sign.csv',
+      );
+      expect(result.rows, hasLength(1));
+      expect(result.rows.single.amountMinorUnit, 25000);
+      expect(result.summary.validRows, 1);
+      expect(result.summary.invalidRows, 2);
+      expect(result.summary.totalRows, 3);
+      expect(
+        result.errors
+            .where((e) => e.code == CsvImportErrorCode.invalidSign)
+            .map((e) => e.rowNumber),
+        [1, 2],
+      );
     });
 
     test('hash dedupe konsisten antar format angka', () {

@@ -35,6 +35,10 @@ enum CsvImportErrorCode {
   /// Nominal bernilai nol (harus > 0).
   zeroAmount,
 
+  /// Tanda nominal tidak sesuai tipe transaksi (mis. `income` negatif).
+  /// Arah transaksi ditentukan kolom `Type`; nominal selalu magnitudo positif.
+  invalidSign,
+
   /// Tipe transaksi tidak dikenal (bukan income/expense/transfer).
   invalidType,
 

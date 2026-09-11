@@ -226,10 +226,12 @@ class CsvImportParser {
       final currency = currencyRaw.toUpperCase();
 
       final int minorUnits;
+      final bool isNegative;
       try {
-        minorUnits = const CsvNumberParser()
-            .parse(amountRaw, currency: currency)
-            .minorUnits;
+        final parsedAmount = const CsvNumberParser()
+            .parse(amountRaw, currency: currency);
+        minorUnits = parsedAmount.minorUnits;
+        isNegative = parsedAmount.isNegative;
       } on FormatException catch (e) {
         errors.add(
           CsvRowError(
@@ -248,6 +250,25 @@ class CsvImportParser {
             rowNumber: rowNumber,
             column: 'Amount',
             message: 'Nominal harus lebih dari nol',
+          ),
+        );
+        continue;
+      }
+
+      // Sign harus sesuai kontrak tipe: arah transaksi ditentukan kolom Type,
+      // nominal disimpan sebagai magnitudo positif (schema: CHECK amount > 0).
+      // Jadi `-50000` / `(50000)` pada income/expense/transfer = salah tulis,
+      // bukan expense implisit — tanpa guard ini `minorUnits` yang selalu
+      // positif membuat nominal negatif lolos sebagai transaksi positif.
+      if (isNegative) {
+        errors.add(
+          CsvRowError(
+            code: CsvImportErrorCode.invalidSign,
+            rowNumber: rowNumber,
+            column: 'Amount',
+            message:
+                'Nominal negatif tidak valid untuk tipe "$type" — '
+                'tulis nominal positif, arah ditentukan kolom Type',
           ),
         );
         continue;
