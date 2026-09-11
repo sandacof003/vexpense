@@ -1,3 +1,4 @@
+import '../../services/csv/csv_import_models.dart';
 import '../database.dart';
 import '../enums.dart';
 import '../daos/transaction_dao.dart';
@@ -64,4 +65,26 @@ abstract interface class TransactionsRepository {
 abstract interface class DashboardData {
   Future<BalanceSummary> totalBalance(String targetCurrency);
   Future<List<Transaction>> recentTransactions(int limit);
+}
+
+/// Entry point import CSV end-to-end (PRD §7).
+///
+/// Dedupe selalu dihitung dari DB di dalam transaksi import, bukan dari data
+/// yang disuplai caller — import ulang file yang sama tidak boleh menggandakan
+/// transaksi, walau caller tidak mengirim daftar hash apa pun.
+abstract interface class CsvImportRepository {
+  /// Parse + validasi + dedupe DB + rencana mapping akun/kategori.
+  /// Read-only: tidak ada tulisan ke database.
+  Future<CsvImportPreview> preview({
+    required List<int> bytes,
+    String? fileName,
+  });
+
+  /// Import atomik: mapping akun/kategori, dedupe dari DB, dan seluruh insert
+  /// dijalankan dalam SATU `AppDatabase.transaction`. Gagal di tengah batch
+  /// melempar exception dan rollback penuh (tidak ada transaksi separuh masuk).
+  Future<CsvImportReport> importBytes({
+    required List<int> bytes,
+    String? fileName,
+  });
 }

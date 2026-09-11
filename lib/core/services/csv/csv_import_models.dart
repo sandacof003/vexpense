@@ -47,6 +47,50 @@ enum CsvImportErrorCode {
 
   /// Baris terdeteksi duplikat terhadap transaksi yang sudah ada.
   duplicate,
+
+  /// Transfer belum bisa dipetakan: kontrak CSV MVP hanya punya satu kolom
+  /// `Account`, sedangkan transfer butuh akun tujuan.
+  unsupportedTransfer,
+
+  /// Akun dengan nama itu sudah ada di DB dengan currency berbeda — nominal
+  /// baris tidak bisa dihormati (transaksi mewarisi currency akun).
+  accountCurrencyMismatch,
+
+  /// Kategori dengan nama itu sudah ada dengan tipe berbeda (income vs expense)
+  /// dan `categories.name` unik — butuh mapping manual.
+  categoryTypeMismatch,
+}
+
+/// Hash dedupe PRD §7 (date + amount + account + category + note).
+///
+/// **Satu-satunya** implementasi hash. Dipakai dua arah supaya tidak bisa
+/// menyimpang: jalur CSV ([CsvParsedRow.computeDedupeHash]) dan jalur baca
+/// transaksi existing dari DB (repository import). Dibangun dari representasi
+/// kanonik field, bukan string mentah, supaya `1.500.000` == `1500000`.
+///
+/// Catatan tanggal: komponen `y-m-d` dipakai apa adanya. Baris CSV disimpan
+/// sebagai date-only UTC ([CsvDateParser]), jadi jalur DB wajib mengirim
+/// `DateTime` hasil `.toUtc()` supaya hash dua arah tetap sama di semua timezone.
+String csvDedupeHash({
+  required DateTime date,
+  required String type,
+  required int amountMinorUnit,
+  required String currencyCode,
+  required String accountName,
+  required String categoryName,
+  String? note,
+}) {
+  final dateKey = '${date.year}-${date.month}-${date.day}';
+  final normalizedNote = (note ?? '').trim();
+  return [
+    dateKey,
+    type,
+    amountMinorUnit,
+    currencyCode,
+    accountName.trim(),
+    categoryName.trim(),
+    normalizedNote,
+  ].join('|');
 }
 
 /// Satu kesalahan pada satu baris CSV, siap ditampilkan UI.
@@ -175,20 +219,97 @@ class CsvParsedRow {
 
   /// Hash dedupe sesuai PRD §7: date + amount + account + category + note.
   ///
-  /// Dipakai service import untuk deteksi duplikat (import ulang tidak
-  /// menggandakan). Hash dibangun dari representasi kanonik field, bukan
-  /// string mentah, supaya `1.500.000` == `1500000` dianggap sama.
-  String computeDedupeHash() {
-    final dateKey = '${date.year}-${date.month}-${date.day}';
-    final normalizedNote = (note ?? '').trim();
-    return [
-      dateKey,
-      type,
-      amountMinorUnit,
-      currencyCode,
-      accountName.trim(),
-      categoryName.trim(),
-      normalizedNote,
-    ].join('|');
-  }
+  /// Delegasi ke [csvDedupeHash] — implementasi tunggal, sama dengan yang
+  /// dipakai repository import saat menghitung hash transaksi existing dari DB.
+  String computeDedupeHash() => csvDedupeHash(
+    date: date,
+    type: type,
+    amountMinorUnit: amountMinorUnit,
+    currencyCode: currencyCode,
+    accountName: accountName,
+    categoryName: categoryName,
+    note: note,
+  );
+}
+
+/// Hasil preview import: parser + validasi + dedupe DB + rencana mapping akun
+/// dan kategori (PRD §7 langkah 1-4). Belum ada tulisan ke DB.
+class CsvImportPreview {
+  const CsvImportPreview({
+    required this.result,
+    required this.accountsToCreate,
+    required this.categoriesToCreate,
+  });
+
+  /// Baris valid siap-import, error per baris, dan summary dari service.
+  final CsvImportResult result;
+
+  /// Nama akun di CSV yang belum ada di DB — akan dibuat saat import.
+  final List<String> accountsToCreate;
+
+  /// Nama kategori di CSV yang belum ada di DB — akan dibuat saat import.
+  final List<String> categoriesToCreate;
+
+  List<CsvParsedRow> get rows => result.rows;
+  List<CsvRowError> get errors => result.errors;
+  CsvImportSummary get summary => result.summary;
+
+  /// Tidak ada baris yang bisa di-import.
+  bool get isEmpty => rows.isEmpty;
+
+  /// Tidak ada satu pun error (file maupun baris).
+  bool get isClean => errors.isEmpty;
+
+  /// Error level file (mis. header hilang) — kalau ada, tidak ada baris masuk.
+  List<CsvRowError> get fileErrors =>
+      errors.where((e) => e.rowNumber == null).toList();
+}
+
+/// Hasil commit import ke database (PRD §7 langkah 5).
+///
+/// Seluruh batch ditulis dalam satu transaksi: `insertedRows` adalah jumlah yang
+/// benar-benar masuk, atau semuanya 0 kalau transaksinya rollback (import
+/// melempar exception, tidak ada transaksi separuh masuk).
+class CsvImportReport {
+  const CsvImportReport({
+    required this.insertedRows,
+    required this.createdAccounts,
+    required this.createdCategories,
+    required this.errors,
+  });
+
+  /// Jumlah transaksi yang benar-benar di-insert.
+  final int insertedRows;
+
+  /// Akun baru yang dibuat otomatis dari nama di CSV.
+  final int createdAccounts;
+
+  /// Kategori baru yang dibuat otomatis dari nama di CSV.
+  final int createdCategories;
+
+  /// Semua alasan baris tidak masuk (duplikat / invalid / tidak bisa dipetakan).
+  final List<CsvRowError> errors;
+
+  /// Baris di-skip karena duplikat (sudah ada di DB atau di batch ini).
+  int get duplicateRows =>
+      errors.where((e) => e.code == CsvImportErrorCode.duplicate).length;
+
+  /// Baris di-skip karena tidak valid / tidak bisa dipetakan ke akun-kategori.
+  int get invalidRows => errors
+      .where(
+        (e) =>
+            e.rowNumber != null && e.code != CsvImportErrorCode.duplicate,
+      )
+      .length;
+
+  int get skippedRows => duplicateRows + invalidRows;
+
+  /// Error level file — kalau ada, seluruh import menghasilkan 0 baris.
+  List<CsvRowError> get fileErrors =>
+      errors.where((e) => e.rowNumber == null).toList();
+
+  /// Teks summary siap-tampil (format sama dengan [CsvImportSummary.message]).
+  String get message =>
+      'Berhasil import $insertedRows transaksi, $createdAccounts akun, '
+      '$createdCategories kategori. Gagal/skip: $skippedRows baris';
 }
