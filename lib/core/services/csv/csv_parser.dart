@@ -44,10 +44,21 @@ class CsvParseResult {
 
 /// Parser baris CSV -> [CsvParsedRow].
 class CsvImportParser {
-  const CsvImportParser({this.supportedCurrencyCodes = kDefaultCurrencyCodes});
+  const CsvImportParser({
+    this.supportedCurrencyCodes = kDefaultCurrencyCodes,
+    this.minorUnitsByCurrency = kCurrencyMinorUnits,
+  });
 
   /// Kode mata uang yang dikenal (disuntik supaya parser tidak coupling ke DB).
   final Set<String> supportedCurrencyCodes;
+
+  /// Minor unit per kode mata uang (disuntik dari tabel `currencies`).
+  ///
+  /// Defaultnya [kCurrencyMinorUnits] — fallback statis yang dipakai hanya bila
+  /// caller tidak punya akses DB. Currency dengan minor unit berbeda (0/3)
+  /// yang ditambahkan ke tabel currencies di runtime harus ikut tersuntik di
+  /// sini, kalau tidak nominalnya diskalakan salah (100x).
+  final Map<String, int> minorUnitsByCurrency;
 
   CsvParseResult parse(String decoded) {
     // Normalisasi line ending: \r\n dan \r -> \n (eol converter dipatok '\n').
@@ -228,8 +239,9 @@ class CsvImportParser {
       final int minorUnits;
       final bool isNegative;
       try {
-        final parsedAmount = const CsvNumberParser()
-            .parse(amountRaw, currency: currency);
+        final parsedAmount = CsvNumberParser(
+          minorUnitsByCurrency: minorUnitsByCurrency,
+        ).parse(amountRaw, currency: currency);
         minorUnits = parsedAmount.minorUnits;
         isNegative = parsedAmount.isNegative;
       } on FormatException catch (e) {

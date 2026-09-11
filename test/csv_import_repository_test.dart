@@ -189,6 +189,87 @@ void main() {
       expect(await db.accountDao.getAll(), hasLength(2));
     });
 
+    test('dedupe case-insensitive: CSV lowercase vs nama akun/kategori di DB', () async {
+      // DB: akun 'Cash' + kategori seed 'Makan & Minum' (dua-duanya berkapital).
+      await db.accountDao.insert(
+        AccountsCompanion.insert(
+          name: 'Cash',
+          type: AccountType.cash,
+          currency: 'IDR',
+        ),
+      );
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,expense,makan & minum,cash,25000,IDR,lunch';
+
+      final first = await repo.importBytes(
+        bytes: _bytes(csv),
+        fileName: 'mutasi.csv',
+      );
+      expect(first.insertedRows, 1);
+      expect(first.createdAccounts, 0); // 'cash' -> akun 'Cash' existing
+      expect(first.createdCategories, 0); // 'makan & minum' -> kategori seed
+
+      // Import ulang file yang sama: hash CSV harus sama dengan hash yang
+      // dibaca dari DB (dulu beda kapitalisasi -> inserted=1 lagi, total 2).
+      final second = await repo.importBytes(
+        bytes: _bytes(csv),
+        fileName: 'mutasi.csv',
+      );
+      expect(second.insertedRows, 0);
+      expect(second.duplicateRows, 1);
+      expect(await db.transactionDao.count(), 1);
+    });
+
+    test('satu batch dengan varian kapitalisasi akun/kategori -> 1 transaksi', () async {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,expense,Makan,Cash,25000,IDR,lunch\n'
+          '2024-01-15,expense,makan,cash,25000,IDR,lunch';
+      final report = await repo.importBytes(
+        bytes: _bytes(csv),
+        fileName: 'mutasi.csv',
+      );
+
+      expect(report.insertedRows, 1);
+      expect(report.duplicateRows, 1);
+      expect(await db.transactionDao.count(), 1);
+      expect(await db.accountDao.getAll(), hasLength(1)); // 'Cash', bukan 2 akun
+    });
+
+    test('minor unit diambil dari tabel currencies, bukan const', () async {
+      // KWD (minor 3) & VND (minor 0) tidak ada di kCurrencyMinorUnits;
+      // tanpa database sebagai sumber kebenaran nominalnya salah 10x-100x.
+      await db.currencyDao.upsert(
+        CurrenciesCompanion.insert(code: 'KWD', minorUnit: 3, symbol: 'KD'),
+      );
+      await db.currencyDao.upsert(
+        CurrenciesCompanion.insert(code: 'VND', minorUnit: 0, symbol: '₫'),
+      );
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,expense,Makan,Dinar,1.23,KWD,minyak\n'
+          '2024-01-16,expense,Makan,Tunai,25000,VND,mie';
+
+      final report = await repo.importBytes(
+        bytes: _bytes(csv),
+        fileName: 'mutasi.csv',
+      );
+      expect(report.insertedRows, 2);
+
+      final transactions = await db.transactionDao.getFiltered(
+        const TransactionFilter(),
+      );
+      expect(
+        transactions.firstWhere((t) => t.description == 'minyak').amount,
+        1230, // 1.23 KWD (3 minor unit), bukan 123
+      );
+      expect(
+        transactions.firstWhere((t) => t.description == 'mie').amount,
+        25000, // 25000 VND (0 minor unit), bukan 2500000
+      );
+    });
+
     test('idempotent walau caller tidak mengirim hash apa pun (dedupe dari DB)', () async {
       // Bukti kontrak: API hanya butuh bytes — tidak ada parameter existingHashes.
       await repo.importBytes(bytes: _bytes(_csv), fileName: 'mutasi.csv');

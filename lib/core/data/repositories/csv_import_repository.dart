@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../services/csv/csv_formats.dart';
 import '../../services/csv/csv_import_models.dart';
 import '../../services/csv/csv_import_service.dart';
 import '../../services/csv/csv_parser.dart';
@@ -171,6 +172,11 @@ class CsvImportRepositoryImpl implements CsvImportRepository {
         supportedCurrencyCodes: currencies.isEmpty
             ? kDefaultCurrencyCodes
             : currencies.map((c) => c.code).toSet(),
+        // Minor unit juga dari tabel `currencies` — kalau tidak, currency
+        // minor-0/3 yang cuma ada di DB akan diskalakan fallback 2 (100x).
+        minorUnitsByCurrency: currencies.isEmpty
+            ? kCurrencyMinorUnits
+            : {for (final c in currencies) c.code: c.minorUnit},
         existingHashes: existingHashes,
       ),
     );

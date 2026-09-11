@@ -71,6 +71,11 @@ enum CsvImportErrorCode {
 /// Catatan tanggal: komponen `y-m-d` dipakai apa adanya. Baris CSV disimpan
 /// sebagai date-only UTC ([CsvDateParser]), jadi jalur DB wajib mengirim
 /// `DateTime` hasil `.toUtc()` supaya hash dua arah tetap sama di semua timezone.
+/// Catatan nama: `accountName`/`categoryName` dinormalisasi `toLowerCase()`
+/// (setelah trim) di dalam fungsi ini. Mapping akun/kategori di repository
+/// memakai kunci lowercase, jadi hash dua arah harus ikut case-insensitive —
+/// tanpa ini DB berisi akun `Cash` sementara CSV menulis `cash`, hash-nya beda,
+/// dan file yang sama bisa masuk dua kali.
 String csvDedupeHash({
   required DateTime date,
   required String type,
@@ -87,8 +92,8 @@ String csvDedupeHash({
     type,
     amountMinorUnit,
     currencyCode,
-    accountName.trim(),
-    categoryName.trim(),
+    accountName.trim().toLowerCase(),
+    categoryName.trim().toLowerCase(),
     normalizedNote,
   ].join('|');
 }

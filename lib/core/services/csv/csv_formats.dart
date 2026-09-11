@@ -16,10 +16,17 @@ const List<String> kSupportedDateFormats = <String>[
   'dd/MM/yy',
 ];
 
-/// Minor unit per kode mata uang (ISO 4217) — satu-satunya sumber skala nominal.
+/// Minor unit per kode mata uang (ISO 4217) — **fallback statis**, bukan
+/// sumber kebenaran.
+///
+/// Sumber kebenaran runtime adalah kolom `currencies.minorUnit`; repository
+/// import membangun map dari tabel itu dan menyuntikkannya ke
+/// [CsvNumberParser] (lewat `CsvImportOptions.minorUnitsByCurrency`). Const ini
+/// hanya dipakai kalau caller tidak punya akses DB (unit test parser murni atau
+/// tabel currencies kosong), supaya jenis currency yang belum ada di DB tidak
+/// diam-diam dianggap minor 2 tanpa alasan.
 ///
 /// PRD §6: IDR/JPY = 0 (integer biasa), USD/SGD/MYR/THB = 2, USDT = 6.
-/// Disuntikkan ke [CsvNumberParser] supaya parser tetap murni (tidak baca DB).
 const Map<String, int> kCurrencyMinorUnits = <String, int>{
   'IDR': 0,
   'JPY': 0,

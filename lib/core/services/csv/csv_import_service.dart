@@ -14,6 +14,7 @@ library;
 import 'dart:convert';
 
 import 'csv_encoding.dart';
+import 'csv_formats.dart';
 import 'csv_import_models.dart';
 import 'csv_parser.dart';
 
@@ -21,11 +22,20 @@ import 'csv_parser.dart';
 class CsvImportOptions {
   const CsvImportOptions({
     this.supportedCurrencyCodes = kDefaultCurrencyCodes,
+    this.minorUnitsByCurrency = kCurrencyMinorUnits,
     this.existingHashes = const <String>{},
   });
 
   /// Kode mata uang valid (dari tabel currencies saat runtime).
   final Set<String> supportedCurrencyCodes;
+
+  /// Minor unit per kode mata uang (dari tabel currencies saat runtime).
+  ///
+  /// Nominal diskalakan per minor unit, jadi map ini WAJIB ikut tersuntik
+  /// bersama [supportedCurrencyCodes]; kalau tidak, currency minor-0/3 yang
+  /// cuma ada di DB akan diskalakan pakai fallback 2 (galat 100x).
+  /// Default [kCurrencyMinorUnits] dipakai bila caller tidak punya akses DB.
+  final Map<String, int> minorUnitsByCurrency;
 
   /// Hash transaksi yang sudah ada di DB (untuk deteksi duplikat). Service
   /// import menghitung hash yang sama via [CsvParsedRow.computeDedupeHash].
@@ -78,12 +88,15 @@ class CsvImportService {
       return _emptyResult(fileErrors);
     }
 
-    // 4. Parse dengan currency codes dari opsi.
+    // 4. Parse dengan currency codes + minor unit dari opsi (keduanya berasal
+    // dari tabel currencies di lapisan data).
     final effectiveParser =
-        options.supportedCurrencyCodes == kDefaultCurrencyCodes
+        options.supportedCurrencyCodes == parser.supportedCurrencyCodes &&
+            options.minorUnitsByCurrency == parser.minorUnitsByCurrency
         ? parser
         : CsvImportParser(
             supportedCurrencyCodes: options.supportedCurrencyCodes,
+            minorUnitsByCurrency: options.minorUnitsByCurrency,
           );
     final parsed = effectiveParser.parse(decoded);
 

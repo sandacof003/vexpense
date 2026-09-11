@@ -86,6 +86,40 @@ void main() {
     });
   });
 
+  group('csvDedupeHash', () {
+    String hash({String account = 'Cash', String category = 'Makan & Minum'}) =>
+        csvDedupeHash(
+          date: DateTime.utc(2024, 1, 15),
+          type: 'expense',
+          amountMinorUnit: 25000,
+          currencyCode: 'IDR',
+          accountName: account,
+          categoryName: category,
+          note: ' lunch ',
+        );
+
+    test('nama akun & kategori: lowercase + trim -> hash identik', () {
+      expect(hash(), hash(account: '  cAsH ', category: 'MAKAN & MINUM'));
+    });
+
+    test('field lain tidak ikut dinormalkan (currency/type tetap apa adanya)', () {
+      expect(
+        hash(),
+        isNot(
+          csvDedupeHash(
+            date: DateTime.utc(2024, 1, 15),
+            type: 'expense',
+            amountMinorUnit: 25000,
+            currencyCode: 'idr',
+            accountName: 'Cash',
+            categoryName: 'Makan & Minum',
+            note: 'lunch',
+          ),
+        ),
+      );
+    });
+  });
+
   group('CsvDateParser', () {
     test('ISO yyyy-MM-dd', () {
       expect(CsvDateParser.parse('2024-01-15'), DateTime.utc(2024, 1, 15));
@@ -381,11 +415,24 @@ void main() {
       );
     });
 
-    test('duplikat terhadap existing di-skip', () {
+    test('duplikat terhadap existing di-skip (nama beda kapitalisasi)', () {
+      // CSV menulis lowercase, DB menyimpan 'Cash'/'Makan'. Hash dua arah tetap
+      // sama karena csvDedupeHash menormalkan nama akun/kategori ke lowercase —
+      // tanpa itu file yang sama bisa masuk dua kali (dedupe gagal).
       const dup =
           'Date,Type,Category,Account,Amount,Currency,Note\n'
-          '2024-01-15,expense,Makan,Cash,25000,IDR,lunch\n';
-      const existing = {'2024-1-15|expense|25000|IDR|Cash|Makan|lunch'};
+          '2024-01-15,expense,makan,cash,25000,IDR,lunch\n';
+      final existing = {
+        csvDedupeHash(
+          date: DateTime.utc(2024, 1, 15),
+          type: 'expense',
+          amountMinorUnit: 25000,
+          currencyCode: 'IDR',
+          accountName: 'Cash',
+          categoryName: 'Makan',
+          note: 'lunch',
+        ),
+      };
       final result = service.importBytes(
         bytes: utf8.encode(dup),
         fileName: 'data.csv',
@@ -393,6 +440,20 @@ void main() {
       );
       expect(result.summary.validRows, 0);
       expect(result.summary.duplicateRows, 1);
+    });
+
+    test('duplikat case-insensitive dalam satu file di-skip', () {
+      const dup =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,expense,Makan,Cash,25000,IDR,lunch\n'
+          '2024-01-15,expense,makan,cash,25000,IDR,lunch\n';
+      final result = service.importBytes(
+        bytes: utf8.encode(dup),
+        fileName: 'data.csv',
+      );
+      expect(result.summary.validRows, 1);
+      expect(result.summary.duplicateRows, 1);
+      expect(result.rows.single.accountName, 'Cash');
     });
 
     test('campuran valid + invalid -> summary hitung benar', () {
