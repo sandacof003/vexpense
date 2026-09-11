@@ -37,7 +37,7 @@ const List<String> _uniqueNameIndexes = [
       'ON categories (lower(name))',
 ];
 
-/// Seed kategori bawaan (idempotent — dicek `WHERE NOT EXISTS` saat migration,
+/// Seed kategori bawaan (idempotent — nama dicek dulu sebelum insert,
 /// jadi tidak duplikat walau database dibuka ulang).
 const List<(String, CategoryType)> _seedCategories = [
   ('Gaji', CategoryType.income),
@@ -111,6 +111,8 @@ class AppDatabase extends _$AppDatabase {
   /// semua referensi dipindah ke baris "keeper" (id terkecil per grup
   /// `lower(name)`), lalu baris sisanya dihapus.
   Future<void> _mergeCaseInsensitiveNameDuplicates() async {
+    // HARUS sebelum repoint — lihat [_deleteTransfersBetweenSameNameAccounts].
+    await _deleteTransfersBetweenSameNameAccounts();
     await _repointToKeeper('transactions', 'account_id', 'accounts');
     await _repointToKeeper('transactions', 'to_account_id', 'accounts');
     await _deleteDuplicateNames('accounts');
@@ -129,6 +131,25 @@ class AppDatabase extends _$AppDatabase {
     'SELECT MIN(k.id) FROM $nameTable k WHERE lower(k.name) = ('
     'SELECT lower(s.name) FROM $nameTable s WHERE s.id = $table.$column)) '
     'WHERE $column IS NOT NULL',
+  );
+
+  /// Buang transfer antar dua akun yang namanya sama (case-insensitive).
+  ///
+  /// Di v1 akun `Tunai` (id=1) dan `tunai` (id=2) itu dua baris berbeda, jadi
+  /// transfer 1 → 2 legal. Setelah repoint ke keeper, kedua kolom jatuh ke id
+  /// yang sama → jadi transfer ke diri sendiri, dan CHECK di `tables.dart`
+  /// (`type != 'transfer' OR to_account_id != account_id`) menolak UPDATE-nya
+  /// langsung, bukan cuma barisnya. Karena drift menulis `user_version` sesudah
+  /// `onUpgrade` kelar, throw di sini bikin DB terkunci di v1 dan gagal dibuka
+  /// selamanya. Baris begini cuma bisa muncul dari collapse (CHECK sudah
+  /// melarangnya di v1) dan perpindahan saldonya nol, jadi dibuang lebih dulu.
+  Future<void> _deleteTransfersBetweenSameNameAccounts() => customUpdate(
+    "DELETE FROM transactions WHERE type = 'transfer' "
+    'AND account_id IS NOT NULL AND to_account_id IS NOT NULL '
+    'AND (SELECT lower(na.name) FROM accounts na '
+    'WHERE na.id = transactions.account_id) '
+    '= (SELECT lower(nb.name) FROM accounts nb '
+    'WHERE nb.id = transactions.to_account_id)',
   );
 
   /// Hapus nama duplikat (case-insensitive), sisakan id terkecil.

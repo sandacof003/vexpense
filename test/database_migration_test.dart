@@ -193,7 +193,8 @@ void main() {
       await v1.customStatement('DROP INDEX idx_categories_name_lower');
       await v1.customStatement(
         "INSERT INTO accounts (name, type, currency, opening_balance) "
-        "VALUES ('Tunai', 'cash', 'IDR', 0), ('tunai', 'cash', 'IDR', 0)",
+        "VALUES ('Tunai', 'cash', 'IDR', 0), ('tunai', 'cash', 'IDR', 0), "
+        "('Bank', 'bank', 'IDR', 0)",
       );
       final keeperCategoryId =
           (await v1
@@ -217,6 +218,19 @@ void main() {
         "INSERT INTO transactions (type, amount, account_id, category_id, date) "
         "VALUES ('expense', 25000, 2, $dupCategoryId, $now)",
       );
+      // Transfer antar dua duplikat case-variant akun yang SAMA (legal di v1
+      // karena id-nya beda). Setelah repoint kedua kolom jatuh ke keeper yang
+      // sama → dulu bikin upgrade throw CHECK constraint failed.
+      await v1.customStatement(
+        "INSERT INTO transactions (type, amount, account_id, to_account_id, date) "
+        "VALUES ('transfer', 50000, 1, 2, $now)",
+      );
+      // Transfer dari akun non-duplikat ke salah satu duplikat: cuma kolom
+      // `to_account_id` yang harus di-repoint (dan tidak collapse).
+      await v1.customStatement(
+        "INSERT INTO transactions (type, amount, account_id, to_account_id, date) "
+        "VALUES ('transfer', 75000, 3, 2, $now)",
+      );
       await v1.customStatement('PRAGMA user_version = 1');
       await v1.close();
 
@@ -236,9 +250,11 @@ void main() {
 
       // Duplikat akun di-merge ke keeper (id terkecil) + transaksi di-repoint.
       final accounts = await db.accountDao.getAll();
-      expect(accounts.length, 1);
-      expect(accounts.single.id, 1);
-      expect(accounts.single.name, 'Tunai');
+      expect(accounts.length, 2);
+      final byName = {for (final a in accounts) a.name: a};
+      expect(byName.keys, containsAll(['Tunai', 'Bank']));
+      expect(byName['Tunai']!.id, 1); // keeper = MIN(id), 'tunai' dihapus.
+      expect(byName['Bank']!.id, 3);
 
       // Duplikat kategori ikut dibersihkan (11 seed, tanpa duplikat baru).
       final categories = await db.categoryDao.getAll();
@@ -246,11 +262,43 @@ void main() {
       final lowerNames = categories.map((c) => c.name.toLowerCase()).toList();
       expect(lowerNames.toSet().length, lowerNames.length);
 
-      final tx = await db
-          .customSelect('SELECT account_id, category_id FROM transactions')
+      // Expense di-repoint ke keeper akun & kategori.
+      final expense = await db
+          .customSelect(
+            "SELECT account_id, category_id FROM transactions "
+            "WHERE type = 'expense'",
+          )
           .getSingle();
-      expect(tx.read<int>('account_id'), 1);
-      expect(tx.read<int>('category_id'), keeperCategoryId);
+      expect(expense.read<int>('account_id'), 1);
+      expect(expense.read<int>('category_id'), keeperCategoryId);
+
+      // Transfer yang collapse (duplikat → duplikat) dibuang, bukan bikin
+      // upgrade throw.
+      final selfTransfers = await db
+          .customSelect(
+            "SELECT COUNT(*) AS n FROM transactions "
+            "WHERE type = 'transfer' AND account_id = to_account_id",
+          )
+          .map((r) => r.read<int>('n'))
+          .getSingle();
+      expect(selfTransfers, 0);
+
+      // Yang dibuang cuma baris collapse: expense + transfer yang sah tersisa.
+      final remaining = await db
+          .customSelect('SELECT COUNT(*) AS n FROM transactions')
+          .map((r) => r.read<int>('n'))
+          .getSingle();
+      expect(remaining, 2);
+
+      // Transfer dari akun non-duplikat: `to_account_id` di-repoint ke keeper.
+      final keptTransfer = await db
+          .customSelect(
+            "SELECT account_id, to_account_id FROM transactions "
+            "WHERE type = 'transfer'",
+          )
+          .getSingle();
+      expect(keptTransfer.read<int>('account_id'), 3);
+      expect(keptTransfer.read<int>('to_account_id'), 1);
 
       // Index unik hasil upgrade benar-benar aktif.
       await expectLater(
