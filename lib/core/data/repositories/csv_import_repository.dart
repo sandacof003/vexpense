@@ -19,6 +19,12 @@ import 'repository_contracts.dart';
 /// - mapping akun/kategori by name (auto-create kalau belum ada);
 /// - seluruh insert batch dijalankan dalam SATU `AppDatabase.transaction`,
 ///   jadi kegagalan di tengah batch = rollback penuh.
+///
+/// Satu trade-off yang diketahui: kategori di-resolve (dan bisa dibuat) sebelum
+/// akun, jadi baris yang ditolak karena currency akun tidak cocok bisa
+/// meninggalkan kategori baru tanpa transaksi. Bukan korupsi data dan tidak
+/// memengaruhi atomicity (transaksi tetap rollback penuh saat error), tapi
+/// kategori itu tidak otomatis dibersihkan.
 class CsvImportRepositoryImpl implements CsvImportRepository {
   CsvImportRepositoryImpl(
     this._db,

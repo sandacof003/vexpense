@@ -308,7 +308,9 @@ class CsvImportReport {
   List<CsvRowError> get fileErrors =>
       errors.where((e) => e.rowNumber == null).toList();
 
-  /// Teks summary siap-tampil (format sama dengan [CsvImportSummary.message]).
+  /// Teks summary siap-tampil. Format mengikuti [CsvImportSummary.message],
+  /// tapi angkanya angka hasil commit: baris yang benar-benar masuk dan
+  /// akun/kategori yang benar-benar dibuat (bukan hitungan baris valid).
   String get message =>
       'Berhasil import $insertedRows transaksi, $createdAccounts akun, '
       '$createdCategories kategori. Gagal/skip: $skippedRows baris';
