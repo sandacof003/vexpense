@@ -16,7 +16,21 @@ const List<String> kSupportedDateFormats = <String>[
   'dd/MM/yy',
 ];
 
-/// Parser nominal dari string ke integer minor unit.
+/// Minor unit per kode mata uang (ISO 4217) — satu-satunya sumber skala nominal.
+///
+/// PRD §6: IDR/JPY = 0 (integer biasa), USD/SGD/MYR/THB = 2, USDT = 6.
+/// Disuntikkan ke [CsvNumberParser] supaya parser tetap murni (tidak baca DB).
+const Map<String, int> kCurrencyMinorUnits = <String, int>{
+  'IDR': 0,
+  'JPY': 0,
+  'USD': 2,
+  'SGD': 2,
+  'MYR': 2,
+  'THB': 2,
+  'USDT': 6,
+};
+
+/// Parser nominal dari string ke integer minor unit currency.
 ///
 /// Aturan (PRD §7):
 /// - Simbol mata uang (`Rp`, `$`, `¥`, `₮`, `IDR`, dst.) di-strip.
@@ -24,13 +38,35 @@ const List<String> kSupportedDateFormats = <String>[
 /// - Separator desimal: koma ATAU titik. Disambiguasi dengan aturan digit
 ///   terakhir — grup 3 digit terakhir berarti separator ribuan, bukan desimal.
 ///   Contoh: `1.500` -> 1500 (bulat); `1.50` -> 1.50 (desimal); `1500000.50`.
+/// - Skala mengikuti minor unit currency: `25000` IDR -> 25000, bukan 2500000.
+/// - Digit di luar minor unit dibulatkan half-up (`25000.50` IDR -> 25001).
+/// - Aritmetika integer, tidak lewat `double` (menghindari galat pembulatan).
 /// - Tanda negatif `-` atau dalam kurung `(1500)` dianggap pengeluaran
 ///   (nilai dikembalikan positif + flag [isNegative]).
 class CsvNumberParser {
-  const CsvNumberParser();
+  const CsvNumberParser({
+    this.minorUnitsByCurrency = kCurrencyMinorUnits,
+    this.fallbackMinorUnit = 2,
+  });
+
+  /// Peta minor unit per kode mata uang (default [kCurrencyMinorUnits]).
+  final Map<String, int> minorUnitsByCurrency;
+
+  /// Dipakai bila currency tidak ada di [minorUnitsByCurrency]
+  /// (ISO 4217 default = 2).
+  final int fallbackMinorUnit;
+
+  /// Minor unit untuk [currency] (case-insensitive).
+  int minorUnitFor(String currency) =>
+      minorUnitsByCurrency[currency.trim().toUpperCase()] ?? fallbackMinorUnit;
 
   /// Hasil parse: [minorUnits] selalu positif, [isNegative] menandai negatif.
-  ({int minorUnits, bool isNegative}) parse(String raw) {
+  ///
+  /// [currency] wajib: skala nominal bergantung padanya (IDR/JPY 0 desimal).
+  ({int minorUnits, bool isNegative}) parse(
+    String raw, {
+    required String currency,
+  }) {
     var s = raw.trim();
     var negative = false;
 
@@ -94,15 +130,46 @@ class CsvNumberParser {
       throw const FormatException('Nominal tidak valid setelah normalisasi');
     }
 
-    final doubleValue = double.tryParse(s);
-    if (doubleValue == null || !doubleValue.isFinite) {
-      throw FormatException('Nominal tidak valid: $raw');
-    }
-
-    // Konversi ke minor unit. Untuk 0 desimal nilai sudah bulat.
-    final minorUnits = (doubleValue * 100).round();
+    // Skala ke minor unit currency — aritmetika integer, TANPA `double`.
+    final minorUnits = _toMinorUnits(s, minorUnitFor(currency));
 
     return (minorUnits: minorUnits, isNegative: negative);
+  }
+
+  /// Konversi desimal ternormalisasi (separator `.`) ke minor unit.
+  ///
+  /// [scale] = jumlah digit minor (IDR/JPY 0, USD 2, USDT 6). Digit di luar
+  /// [scale] dibulatkan half-up. Throws [FormatException] kalau bukan angka /
+  /// di luar rentang integer 64-bit.
+  static int _toMinorUnits(String normalized, int scale) {
+    final dot = normalized.indexOf('.');
+    final whole = dot < 0 ? normalized : normalized.substring(0, dot);
+    final frac = dot < 0 ? '' : normalized.substring(dot + 1);
+
+    if (!_isDigits(whole) || !_isDigits(frac)) {
+      throw FormatException('Nominal tidak valid: $normalized');
+    }
+
+    // Ambil tepat `scale` digit pecahan; sisanya hanya dipakai untuk rounding.
+    final kept = frac.padRight(scale, '0').substring(0, scale);
+    final digits = '${whole.isEmpty ? '0' : whole}$kept';
+    var value = int.tryParse(digits);
+    if (value == null) {
+      throw FormatException('Nominal di luar rentang: $normalized');
+    }
+
+    if (frac.length > scale && frac.codeUnitAt(scale) >= 0x35 /* '5' */ ) {
+      value += 1; // half-up
+    }
+    return value;
+  }
+
+  static bool _isDigits(String s) {
+    for (var i = 0; i < s.length; i++) {
+      final c = s.codeUnitAt(i);
+      if (c < 0x30 || c > 0x39) return false;
+    }
+    return true;
   }
 
   static String _normalize(String s, {required String decimalChar}) {

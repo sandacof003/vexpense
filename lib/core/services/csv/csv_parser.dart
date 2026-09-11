@@ -222,9 +222,14 @@ class CsvImportParser {
         continue;
       }
 
+      // Currency dibutuhkan lebih awal: skala minor unit ditentukan per currency.
+      final currency = currencyRaw.toUpperCase();
+
       final int minorUnits;
       try {
-        minorUnits = const CsvNumberParser().parse(amountRaw).minorUnits;
+        minorUnits = const CsvNumberParser()
+            .parse(amountRaw, currency: currency)
+            .minorUnits;
       } on FormatException catch (e) {
         errors.add(
           CsvRowError(
@@ -248,7 +253,6 @@ class CsvImportParser {
         continue;
       }
 
-      final currency = currencyRaw.toUpperCase();
       if (!supportedCurrencyCodes.contains(currency)) {
         errors.add(
           CsvRowError(

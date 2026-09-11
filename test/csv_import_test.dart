@@ -8,55 +8,81 @@ import 'package:v_expense/core/services/csv/csv_import_service.dart';
 import 'package:v_expense/core/services/csv/csv_parser.dart';
 
 void main() {
-  group('CsvNumberParser', () {
+  group('CsvNumberParser — skala per minor unit currency', () {
     const parser = CsvNumberParser();
 
-    test('integer polos', () {
-      expect(parser.parse('1500').minorUnits, 150000);
-      expect(parser.parse('1500').isNegative, false);
+    test('IDR (minor unit 0): 25000 -> 25000, bukan 2500000', () {
+      final r = parser.parse('25000', currency: 'IDR');
+      expect(r.minorUnits, 25000);
+      expect(r.isNegative, false);
     });
 
-    test('format Indonesia dengan titik ribuan', () {
-      expect(parser.parse('1.500.000').minorUnits, 150000000);
+    test('IDR: format Indonesia dengan titik ribuan tidak diskalakan', () {
+      expect(parser.parse('1.500.000', currency: 'IDR').minorUnits, 1500000);
+      expect(parser.parse('Rp 1.500.000', currency: 'IDR').minorUnits, 1500000);
     });
 
-    test('format dengan desimal titik', () {
-      expect(parser.parse('1500000.50').minorUnits, 150000050);
+    test('JPY (minor unit 0)', () {
+      expect(parser.parse('¥1000', currency: 'JPY').minorUnits, 1000);
+      expect(parser.parse('1000.4', currency: 'JPY').minorUnits, 1000);
     });
 
-    test('format dengan desimal koma', () {
-      expect(parser.parse('1500000,50').minorUnits, 150000050);
+    test('USD (minor unit 2)', () {
+      expect(parser.parse(r'$25.00', currency: 'USD').minorUnits, 2500);
+      expect(parser.parse('1500000.50', currency: 'USD').minorUnits, 150000050);
+      expect(parser.parse('1500000,50', currency: 'USD').minorUnits, 150000050);
+    });
+
+    test('USDT (minor unit 6)', () {
+      expect(parser.parse('1.5', currency: 'USDT').minorUnits, 1500000);
+      expect(parser.parse('0.000001', currency: 'USDT').minorUnits, 1);
+    });
+
+    test('desimal melebihi minor unit dibulatkan half-up', () {
+      expect(parser.parse('25000.5', currency: 'IDR').minorUnits, 25001);
+      expect(parser.parse('25000.4', currency: 'IDR').minorUnits, 25000);
+      expect(parser.parse('1.0050', currency: 'USD').minorUnits, 101);
+      expect(parser.parse('2.4999', currency: 'USD').minorUnits, 250);
+    });
+
+    test('parsing eksak tanpa double', () {
+      expect(parser.parse('0.1', currency: 'USD').minorUnits, 10);
+      expect(parser.parse('0.29', currency: 'USD').minorUnits, 29);
+      expect(
+        parser.parse('1234567890.12', currency: 'USD').minorUnits,
+        123456789012,
+      );
+      expect(parser.parse('.50', currency: 'USD').minorUnits, 50);
     });
 
     test('titik ribuan ambigu -> angka 3 digit dianggap ribuan', () {
-      // "1.500" = 1500 (bukan 1.5)
-      expect(parser.parse('1.500').minorUnits, 150000);
+      expect(parser.parse('1.500', currency: 'IDR').minorUnits, 1500);
     });
 
-    test('strip simbol mata uang', () {
-      expect(parser.parse('Rp 1.500.000').minorUnits, 150000000);
-      expect(parser.parse(r'$25.00').minorUnits, 2500);
-      expect(parser.parse('¥1000').minorUnits, 100000);
+    test('currency tak dikenal -> fallback ISO 4217 (2 desimal)', () {
+      expect(parser.parse('25.00', currency: 'EUR').minorUnits, 2500);
+      expect(parser.minorUnitFor('idr'), 0);
+      expect(parser.minorUnitFor('usdt'), 6);
     });
 
     test('tanda negatif (expense)', () {
-      final r = parser.parse('-1500');
-      expect(r.minorUnits, 150000);
+      final r = parser.parse('-1500', currency: 'IDR');
+      expect(r.minorUnits, 1500);
       expect(r.isNegative, true);
     });
 
     test('tanda negatif dalam kurung', () {
-      final r = parser.parse('(1500)');
-      expect(r.minorUnits, 150000);
+      final r = parser.parse('(1500)', currency: 'IDR');
+      expect(r.minorUnits, 1500);
       expect(r.isNegative, true);
     });
 
     test('nominal kosong throws', () {
-      expect(() => parser.parse(''), throwsFormatException);
+      expect(() => parser.parse('', currency: 'IDR'), throwsFormatException);
     });
 
     test('nominal tanpa angka throws', () {
-      expect(() => parser.parse('abc'), throwsFormatException);
+      expect(() => parser.parse('abc', currency: 'IDR'), throwsFormatException);
     });
   });
 
@@ -114,10 +140,23 @@ void main() {
       final result = parser.parse(csv);
       expect(result.errors, isEmpty);
       expect(result.rows, hasLength(2));
-      expect(result.rows.first.amountMinorUnit, 2500000);
+      expect(result.rows.first.amountMinorUnit, 25000);
       expect(result.rows.first.categoryName, 'Makan');
       expect(result.rows.first.note, 'lunch');
       expect(result.rows[1].note, isNull);
+    });
+
+    test('nominal diskalakan sesuai minor unit currency baris', () {
+      const csv =
+          'Date,Type,Category,Account,Amount,Currency,Note\n'
+          '2024-01-15,expense,Makan,Cash,25000,IDR,\n'
+          '2024-01-15,expense,Makan,JPY Wallet,1000,JPY,\n'
+          '2024-01-15,expense,Makan,USD Wallet,25.00,USD,';
+      final result = parser.parse(csv);
+      expect(result.errors, isEmpty);
+      expect(result.rows[0].amountMinorUnit, 25000); // IDR: 0 desimal
+      expect(result.rows[1].amountMinorUnit, 1000); // JPY: 0 desimal
+      expect(result.rows[2].amountMinorUnit, 2500); // USD: 2 desimal
     });
 
     test('kolom wajib hilang -> error missingHeaders', () {
@@ -284,7 +323,7 @@ void main() {
       const dup =
           'Date,Type,Category,Account,Amount,Currency,Note\n'
           '2024-01-15,expense,Makan,Cash,25000,IDR,lunch\n';
-      const existing = {'2024-1-15|expense|2500000|IDR|Cash|Makan|lunch'};
+      const existing = {'2024-1-15|expense|25000|IDR|Cash|Makan|lunch'};
       final result = service.importBytes(
         bytes: utf8.encode(dup),
         fileName: 'data.csv',
