@@ -111,6 +111,11 @@ class AppDatabase extends _$AppDatabase {
   /// semua referensi dipindah ke baris "keeper" (id terkecil per grup
   /// `lower(name)`), lalu baris sisanya dihapus.
   Future<void> _mergeCaseInsensitiveNameDuplicates() async {
+    // HARUS lebih dulu: duplikat yang currency-nya beda tidak boleh ikut
+    // di-merge (lihat [_renameCurrencyMismatchedDuplicates]) — dan setelah
+    // rename, sisa duplikat yang ada pasti se-currency, jadi langkah-langkah
+    // di bawah aman dijalankan apa adanya.
+    await _renameCurrencyMismatchedDuplicates();
     // HARUS sebelum repoint — lihat [_deleteTransfersBetweenSameNameAccounts].
     await _deleteTransfersBetweenSameNameAccounts();
     await _repointToKeeper('transactions', 'account_id', 'accounts');
@@ -118,6 +123,65 @@ class AppDatabase extends _$AppDatabase {
     await _deleteDuplicateNames('accounts');
     await _repointToKeeper('transactions', 'category_id', 'categories');
     await _deleteDuplicateNames('categories');
+  }
+
+  /// Rename duplikat nama akun (case-insensitive) yang currency-nya BEDA dari
+  /// keeper (id terkecil) — jangan di-merge.
+  ///
+  /// `Tunai` (IDR) + `tunai` (USD) itu dua akun berbeda yang kebetulan namanya
+  /// sama: kalau transaksinya di-repoint ke keeper, USD 25.00 (2500 minor)
+  /// berubah makna jadi IDR 2500 — korupsi diam-diam di jalur uang. Jadi
+  /// duplikat beda-currency di-rename (`cash (2)`) dan tetap berdiri sendiri
+  /// beserta transaksinya; index unik `lower(name)` tetap bisa dibuat.
+  ///
+  /// Return jumlah akun yang di-rename (dibaca oleh test migrasi).
+  Future<int> _renameCurrencyMismatchedDuplicates() async {
+    final rows = await customSelect(
+      'SELECT id, name, currency FROM accounts ORDER BY id',
+      readsFrom: {accounts},
+    ).get().then(
+      (rows) => [
+        for (final row in rows)
+          (
+            id: row.read<int>('id'),
+            name: row.read<String>('name'),
+            currency: row.read<String>('currency'),
+          ),
+      ],
+    );
+
+    // Query sudah ORDER BY id → elemen pertama tiap grup = MIN(id) = keeper.
+    final groups = <String, List<({int id, String name, String currency})>>{};
+    for (final row in rows) {
+      groups.putIfAbsent(row.name.trim().toLowerCase(), () => []).add(row);
+    }
+
+    final taken = {for (final row in rows) row.name.trim().toLowerCase()};
+    var renamed = 0;
+
+    for (final group in groups.values) {
+      if (group.length < 2) continue;
+      final keeper = group.first;
+      for (final duplicate in group.skip(1)) {
+        if (duplicate.currency == keeper.currency) continue; // aman: di-merge
+        var suffix = 2;
+        var candidate = '${duplicate.name} ($suffix)';
+        while (!taken.add(candidate.trim().toLowerCase())) {
+          suffix++;
+          candidate = '${duplicate.name} ($suffix)';
+        }
+        await customUpdate(
+          'UPDATE accounts SET name = ? WHERE id = ?',
+          variables: [
+            Variable.withString(candidate),
+            Variable.withInt(duplicate.id),
+          ],
+          updates: {accounts},
+        );
+        renamed++;
+      }
+    }
+    return renamed;
   }
 
   /// Pindahkan `table.column` ke keeper grup nama (case-insensitive).

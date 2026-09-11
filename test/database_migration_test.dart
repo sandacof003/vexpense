@@ -315,6 +315,101 @@ void main() {
       );
     },
   );
+
+  test(
+    'upgrade v1 -> v2: duplikat akun beda currency di-rename, bukan di-merge',
+    () async {
+      // --- Fixture v1: akun 'Cash' (IDR) dan 'cash' (USD) itu DUA akun berbeda.
+      final v1 = openFile();
+      await v1.customStatement('DROP INDEX idx_accounts_name_lower');
+      await v1.customStatement('DROP INDEX idx_categories_name_lower');
+      await v1.customStatement(
+        "INSERT INTO accounts (name, type, currency, opening_balance) VALUES "
+        "('Cash', 'cash', 'IDR', 0), ('cash', 'cash', 'USD', 0), "
+        "('Bank', 'bank', 'IDR', 0)",
+      );
+      final categoryId =
+          (await v1
+                  .customSelect(
+                    "SELECT id FROM categories WHERE type = 'expense' LIMIT 1",
+                  )
+                  .getSingle())
+              .read<int>('id');
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      // USD 25.00 = 2500 minor unit. Kalau baris ini di-repoint ke akun IDR,
+      // artinya berubah jadi IDR 2500 — korupsi diam-diam.
+      await v1.customStatement(
+        "INSERT INTO transactions (type, amount, account_id, category_id, date) "
+        "VALUES ('expense', 2500, 2, $categoryId, $now)",
+      );
+      await v1.customStatement(
+        "INSERT INTO transactions (type, amount, account_id, category_id, date) "
+        "VALUES ('expense', 25000, 1, $categoryId, $now)",
+      );
+      // Transfer Cash (IDR) -> cash (USD): sah di v1, dan tetap sah sesudah
+      // upgrade karena kedua akun memang tidak boleh di-merge.
+      await v1.customStatement(
+        "INSERT INTO transactions (type, amount, account_id, to_account_id, date) "
+        "VALUES ('transfer', 50000, 1, 2, $now)",
+      );
+      await v1.customStatement('PRAGMA user_version = 1');
+      await v1.close();
+
+      // --- Buka dengan schema v2.
+      final db = openFile();
+      addTearDown(db.close);
+
+      expect(await _userVersion(db), 2);
+      expect(
+        await _indexNames(db, 'accounts'),
+        contains('idx_accounts_name_lower'),
+      );
+
+      // Keeper (id terkecil, IDR) tetap; duplikat beda currency di-rename.
+      // Jumlah yang di-rename = 1 (dibuktikan oleh nama 'cash (2)' di bawah).
+      final accounts = await db.accountDao.getAll();
+      expect(accounts, hasLength(3));
+      final byId = {for (final a in accounts) a.id: a};
+      expect(byId[1]!.name, 'Cash');
+      expect(byId[1]!.currency, 'IDR');
+      expect(byId[2]!.name, 'cash (2)');
+      expect(byId[2]!.currency, 'USD');
+      expect(byId[3]!.name, 'Bank');
+
+      // Tidak ada transaksi yang berpindah akun: USD tetap di akun USD.
+      final rows = await db
+          .customSelect(
+            'SELECT type, amount, account_id, to_account_id FROM transactions '
+            'ORDER BY id',
+          )
+          .get();
+      expect(rows, hasLength(3));
+      expect(rows[0].read<int>('account_id'), 2);
+      expect(rows[0].read<int>('amount'), 2500);
+      expect(byId[rows[0].read<int>('account_id')]!.currency, 'USD');
+      expect(rows[1].read<int>('account_id'), 1);
+      expect(rows[1].read<int>('amount'), 25000);
+      expect(byId[rows[1].read<int>('account_id')]!.currency, 'IDR');
+      // Transfer lintas currency utuh (dulu ikut dibuang karena namanya sama).
+      expect(rows[2].read<String>('type'), 'transfer');
+      expect(rows[2].read<int>('account_id'), 1);
+      expect(rows[2].read<int?>('to_account_id'), 2);
+
+      // Index unik tetap aktif sesudah rename.
+      await expectLater(
+        db
+            .into(db.accounts)
+            .insert(
+              AccountsCompanion.insert(
+                name: 'CASH',
+                type: AccountType.cash,
+                currency: 'IDR',
+              ),
+            ),
+        throwsA(predicate((e) => e.toString().contains('UNIQUE'))),
+      );
+    },
+  );
 }
 
 Future<int> _userVersion(AppDatabase db) => db
