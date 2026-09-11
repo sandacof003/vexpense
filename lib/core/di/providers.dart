@@ -15,6 +15,7 @@ import '../data/repositories/repository_contracts.dart';
 import '../data/repositories/transaction_repository.dart';
 import '../data/services/currency_converter.dart';
 import '../services/csv/csv_import_service.dart';
+import '../../features/reports/data/reports_repository.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
@@ -50,6 +51,18 @@ final dashboardRepositoryProvider = Provider<DashboardData>((ref) {
     AccountDao(db),
     TransactionDao(db),
     transactionRepository,
+    converter,
+  );
+});
+
+/// Query agregasi laporan (chart) — BE-05. Semua nominal dikonversi ke IDR.
+final reportsRepositoryProvider = Provider<ReportsRepository>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final converter = CurrencyConverter(CurrencyDao(db), ExchangeRateDao(db));
+  return ReportsRepository(
+    TransactionDao(db),
+    AccountDao(db),
+    CategoryDao(db),
     converter,
   );
 });
