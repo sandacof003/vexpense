@@ -26,11 +26,20 @@ class CategoryRepository implements CategoriesRepository {
   Future<Category?> getById(int id) => _categoryDao.getById(id);
 
   /// Kategori "Lainnya" untuk tipe tertentu (fallback saat hapus kategori).
-  Future<Category?> _findFallback(CategoryType type) async {
+  /// [excludeId] = kategori yang sedang dihapus — tidak boleh jadi fallback
+  /// dirinya sendiri (hapus "Lainnya" saat cuma "Lainnya" yang tersisa
+  /// membuat reassign menunjuk baris yang dihapus → FK RESTRICT gagal).
+  Future<Category?> _findFallback(
+    CategoryType type, {
+    required int excludeId,
+  }) async {
     final byName = await _categoryDao.getByName('Lainnya');
-    if (byName != null && byName.type == type) return byName;
+    if (byName != null && byName.type == type && byName.id != excludeId) {
+      return byName;
+    }
     final sameType = await _categoryDao.getByType(type);
-    return sameType.isEmpty ? null : sameType.first;
+    final candidates = sameType.where((c) => c.id != excludeId).toList();
+    return candidates.isEmpty ? null : candidates.first;
   }
 
   @override
@@ -77,7 +86,7 @@ class CategoryRepository implements CategoriesRepository {
     final category = await _categoryDao.getById(id);
     if (category == null) return;
 
-    final fallback = await _findFallback(category.type);
+    final fallback = await _findFallback(category.type, excludeId: id);
     if (fallback == null) {
       throw StateError(
         'Tidak ada kategori fallback untuk tipe ${category.type.name}',
