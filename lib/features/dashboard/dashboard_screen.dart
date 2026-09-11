@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/settings/settings_providers.dart';
+import '../accounts/accounts_screen.dart';
+import '../categories/categories_screen.dart';
 
 /// Area utama aplikasi (placeholder FE-01).
 ///
@@ -35,6 +38,20 @@ class DashboardScreen extends ConsumerWidget {
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
+            ),
+            const SizedBox(height: 24),
+            // Navigasi kelola akun & kategori (FE-06) — wireframe screen 8.
+            TextButton.icon(
+              key: const Key('dashboard.goto.accounts'),
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('Kelola Akun'),
+              onPressed: () => context.push(AccountsScreen.path),
+            ),
+            TextButton.icon(
+              key: const Key('dashboard.goto.categories'),
+              icon: const Icon(Icons.category_outlined),
+              label: const Text('Kelola Kategori'),
+              onPressed: () => context.push(CategoriesScreen.path),
             ),
           ],
         ),
