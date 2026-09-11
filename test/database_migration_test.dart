@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:v_expense/core/data/database.dart';
+import 'package:v_expense/core/data/enums.dart';
 
 /// Test schema & migrasi BE-01 secara end-to-end memakai database FILE asli
 /// (bukan in-memory), supaya migrasi + seed beneran dijalankan ulang saat
@@ -129,4 +130,156 @@ void main() {
         .get();
     expect(cols, isNot(contains('balance')));
   });
+
+  test(
+    'onCreate memasang unique index lower(name) di accounts & categories',
+    () async {
+      final db = openFile();
+      addTearDown(db.close);
+
+      expect(
+        await _indexNames(db, 'accounts'),
+        contains('idx_accounts_name_lower'),
+      );
+      expect(
+        await _indexNames(db, 'categories'),
+        contains('idx_categories_name_lower'),
+      );
+
+      await db
+          .into(db.accounts)
+          .insert(
+            AccountsCompanion.insert(
+              name: 'Tunai',
+              type: AccountType.cash,
+              currency: 'IDR',
+            ),
+          );
+
+      // Duplikat beda kapitalisasi ditolak di level SQL, bukan cuma di repository.
+      await expectLater(
+        db
+            .into(db.accounts)
+            .insert(
+              AccountsCompanion.insert(
+                name: 'tunai',
+                type: AccountType.cash,
+                currency: 'IDR',
+              ),
+            ),
+        throwsA(predicate((e) => e.toString().contains('UNIQUE'))),
+      );
+      await expectLater(
+        db
+            .into(db.categories)
+            .insert(
+              CategoriesCompanion.insert(
+                name: 'makan & minum',
+                type: CategoryType.expense,
+              ),
+            ),
+        throwsA(predicate((e) => e.toString().contains('UNIQUE'))),
+      );
+    },
+  );
+
+  test(
+    'upgrade v1 -> v2: migration step bikin index unik + rapikan nama duplikat',
+    () async {
+      // --- Fixture DB v1: index unik belum ada, dan sudah ada nama duplikat
+      // (mungkin karena jalur tulis lama yang melewati validasi repository).
+      final v1 = openFile();
+      await v1.customStatement('DROP INDEX idx_accounts_name_lower');
+      await v1.customStatement('DROP INDEX idx_categories_name_lower');
+      await v1.customStatement(
+        "INSERT INTO accounts (name, type, currency, opening_balance) "
+        "VALUES ('Tunai', 'cash', 'IDR', 0), ('tunai', 'cash', 'IDR', 0)",
+      );
+      final keeperCategoryId =
+          (await v1
+                  .customSelect(
+                    "SELECT id FROM categories WHERE name = 'Makan & Minum'",
+                  )
+                  .getSingle())
+              .read<int>('id');
+      await v1.customStatement(
+        "INSERT INTO categories (name, type) VALUES ('makan & minum', 'expense')",
+      );
+      final dupCategoryId =
+          (await v1
+                  .customSelect(
+                    "SELECT id FROM categories WHERE name = 'makan & minum'",
+                  )
+                  .getSingle())
+              .read<int>('id');
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      await v1.customStatement(
+        "INSERT INTO transactions (type, amount, account_id, category_id, date) "
+        "VALUES ('expense', 25000, 2, $dupCategoryId, $now)",
+      );
+      await v1.customStatement('PRAGMA user_version = 1');
+      await v1.close();
+
+      // --- Buka dengan schema v2 → onUpgrade(1, 2) harus jalan.
+      final db = openFile();
+      addTearDown(db.close);
+
+      expect(await _userVersion(db), 2);
+      expect(
+        await _indexNames(db, 'accounts'),
+        contains('idx_accounts_name_lower'),
+      );
+      expect(
+        await _indexNames(db, 'categories'),
+        contains('idx_categories_name_lower'),
+      );
+
+      // Duplikat akun di-merge ke keeper (id terkecil) + transaksi di-repoint.
+      final accounts = await db.accountDao.getAll();
+      expect(accounts.length, 1);
+      expect(accounts.single.id, 1);
+      expect(accounts.single.name, 'Tunai');
+
+      // Duplikat kategori ikut dibersihkan (11 seed, tanpa duplikat baru).
+      final categories = await db.categoryDao.getAll();
+      expect(categories.length, 11);
+      final lowerNames = categories.map((c) => c.name.toLowerCase()).toList();
+      expect(lowerNames.toSet().length, lowerNames.length);
+
+      final tx = await db
+          .customSelect('SELECT account_id, category_id FROM transactions')
+          .getSingle();
+      expect(tx.read<int>('account_id'), 1);
+      expect(tx.read<int>('category_id'), keeperCategoryId);
+
+      // Index unik hasil upgrade benar-benar aktif.
+      await expectLater(
+        db
+            .into(db.accounts)
+            .insert(
+              AccountsCompanion.insert(
+                name: 'TUNAI',
+                type: AccountType.cash,
+                currency: 'IDR',
+              ),
+            ),
+        throwsA(predicate((e) => e.toString().contains('UNIQUE'))),
+      );
+    },
+  );
+}
+
+Future<int> _userVersion(AppDatabase db) => db
+    .customSelect('PRAGMA user_version')
+    .map((r) => r.read<int>('user_version'))
+    .getSingle();
+
+Future<Set<String>> _indexNames(AppDatabase db, String table) async {
+  final rows = await db
+      .customSelect(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = '$table'",
+      )
+      .map((r) => r.read<String>('name'))
+      .get();
+  return rows.toSet();
 }
