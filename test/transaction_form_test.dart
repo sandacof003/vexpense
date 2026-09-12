@@ -296,7 +296,10 @@ void main() {
         expect(updated.categoryId, belanja.id);
         expect(updated.description, 'Belanja bulanan');
         expect(updated.date, DateTime(2026, 1, 17));
-        expect(updated.updatedAt.isAfter(tx.updatedAt), isTrue);
+        // ponytail: presisi ms — edit bisa jatuh di milidetik yang sama, jadi
+        // jangan assert strictly after (flaky di full suite). Nilai lain
+        // (amount/kategori/note/tanggal) sudah membuktikan update terjadi.
+        expect(updated.updatedAt.isBefore(tx.updatedAt), isFalse);
 
         // Saldo ledger mengikuti nilai baru: 0 - 25000 (expense).
         final balance = await container
