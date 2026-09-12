@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/settings/settings_providers.dart';
 import '../accounts/accounts_screen.dart';
 import '../categories/categories_screen.dart';
+import '../transactions/presentation/transaction_form_screen.dart';
 
 /// Area utama aplikasi (placeholder FE-01).
 ///
@@ -21,6 +22,17 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('V Expense')),
+      // Quick add transaksi (PRD dashboard: quick add button).
+      floatingActionButton: FloatingActionButton(
+        key: const Key('dashboard.quick.add'),
+        onPressed: () =>
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const TransactionFormScreen(),
+              ),
+            ),
+        child: const Icon(Icons.add),
+      ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
