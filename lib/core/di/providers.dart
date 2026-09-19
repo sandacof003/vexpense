@@ -94,6 +94,19 @@ final transactionsProvider = StreamProvider.autoDispose<List<Transaction>>((
       .watchFiltered(const TransactionFilter());
 });
 
+/// Filter aktif daftar transaksi (FE-05). Search + filter hidup berdampingan
+/// di satu [TransactionFilter] — mengubahnya tidak pernah menyentuh data.
+final transactionListFilterProvider = StateProvider<TransactionFilter>(
+  (ref) => const TransactionFilter(),
+);
+
+/// Stream transaksi sesuai filter aktif, terbaru dulu (FE-05).
+final filteredTransactionsProvider =
+    StreamProvider.autoDispose<List<Transaction>>((ref) {
+      final filter = ref.watch(transactionListFilterProvider);
+      return ref.watch(transactionRepositoryProvider).watchFiltered(filter);
+    });
+
 final accountsProvider = StreamProvider.autoDispose<List<Account>>((ref) {
   return ref.watch(accountRepositoryProvider).watchAll();
 });

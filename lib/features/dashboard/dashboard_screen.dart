@@ -12,6 +12,7 @@ import '../../core/settings/settings_providers.dart';
 import '../accounts/accounts_screen.dart';
 import '../categories/categories_screen.dart';
 import '../transactions/presentation/transaction_form_screen.dart';
+import '../transactions/presentation/transaction_list_screen.dart';
 
 /// Dashboard FE-03: total balance (IDR), ringkasan bulan berjalan, dan
 /// transaksi terbaru. Semua saldo dihitung dari ledger (BE-02/BE-05) —
@@ -204,9 +205,15 @@ class DashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           // Navigasi kelola akun & kategori (FE-06) — wireframe screen 8.
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Wrap(
+            alignment: WrapAlignment.center,
             children: [
+              TextButton.icon(
+                key: const Key('dashboard.goto.transactions'),
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: const Text('Semua Transaksi'),
+                onPressed: () => context.push(TransactionListScreen.path),
+              ),
               TextButton.icon(
                 key: const Key('dashboard.goto.accounts'),
                 icon: const Icon(Icons.account_balance_wallet_outlined),

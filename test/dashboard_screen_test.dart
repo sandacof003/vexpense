@@ -3,12 +3,14 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:v_expense/core/data/database.dart';
 import 'package:v_expense/core/data/enums.dart';
 import 'package:v_expense/core/di/providers.dart';
 import 'package:v_expense/core/settings/settings_providers.dart';
 import 'package:v_expense/features/dashboard/dashboard_screen.dart';
+import 'package:v_expense/features/transactions/presentation/transaction_list_screen.dart';
 
 /// Test FE-03: dashboard saldo/ringkasan/transaksi terbaru di atas DB
 /// in-memory (repository BE-02/BE-05 asli ikut berjalan).
@@ -39,6 +41,33 @@ void main() {
   tearDown(() async {
     container.dispose();
     await db.close();
+  });
+
+  testWidgets('tombol Semua Transaksi membuka daftar transaksi', (tester) async {
+    // Butuh router nyata karena tombol ini `context.push` ke route FE-05.
+    final router = GoRouter(
+      initialLocation: '/dashboard',
+      routes: [
+        GoRoute(
+          path: '/dashboard',
+          builder: (context, state) => const DashboardScreen(),
+        ),
+        GoRoute(
+          path: TransactionListScreen.path,
+          builder: (context, state) => const TransactionListScreen(),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('dashboard.goto.transactions')));
+    await tester.pumpAndSettle();
+    expect(find.byType(TransactionListScreen), findsOneWidget);
   });
 
   Future<void> pumpDashboard(WidgetTester tester) async {
