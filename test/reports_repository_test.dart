@@ -416,5 +416,33 @@ void main() {
       expect(report.isComplete, isFalse);
       expect(report.missingRateCurrencies, ['USD']);
     });
+
+    test(
+      'transfer tanpa rate tidak membuat warning atau angka chart',
+      () async {
+        final from = await accountRepo.create(
+          name: 'USD From',
+          type: AccountType.bank,
+          currency: 'USD',
+        );
+        final to = await accountRepo.create(
+          name: 'USD To',
+          type: AccountType.bank,
+          currency: 'USD',
+        );
+        await transactionRepo.transfer(
+          fromAccountId: from.id,
+          toAccountId: to.id,
+          amount: 100,
+          date: DateTime(2026, 1, 1),
+        );
+
+        final report = await reportsRepo.incomeVsExpense();
+        expect(report.incomeMinorUnit, 0);
+        expect(report.expenseMinorUnit, 0);
+        expect(report.isComplete, isTrue);
+        expect(report.missingRateCurrencies, isEmpty);
+      },
+    );
   });
 }

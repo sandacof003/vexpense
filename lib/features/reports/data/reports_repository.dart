@@ -128,6 +128,8 @@ class ReportsRepository {
     final missing = <String>{};
 
     for (final t in transactions) {
+      if (t.type == TransactionType.transfer) continue;
+
       final account = accountsById[t.accountId];
       if (account == null) continue;
 
@@ -147,7 +149,6 @@ class ReportsRepository {
         case TransactionType.expense:
           expense += conversion.amountMinorUnit;
         case TransactionType.transfer:
-          // Transfer dikecualikan dari chart.
           break;
       }
     }
