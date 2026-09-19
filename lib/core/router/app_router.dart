@@ -6,6 +6,7 @@ import '../../features/accounts/accounts_screen.dart';
 import '../../features/categories/categories_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/transactions/presentation/transaction_list_screen.dart';
 import '../settings/settings_providers.dart';
 
 /// Routing aplikasi: onboarding vs area utama.
@@ -46,6 +47,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: CategoriesScreen.path,
         builder: (context, state) => const CategoriesScreen(),
+      ),
+      GoRoute(
+        path: TransactionListScreen.path,
+        builder: (context, state) => const TransactionListScreen(),
       ),
     ],
   );
