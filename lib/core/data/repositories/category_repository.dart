@@ -64,6 +64,7 @@ class CategoryRepository implements CategoriesRepository {
     return (await _categoryDao.getById(id))!;
   }
 
+  @override
   Future<void> update(
     Category category, {
     required String newName,

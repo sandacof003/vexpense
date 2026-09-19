@@ -25,6 +25,9 @@ class FakeAccountsRepository implements AccountsRepository {
   }) => throw UnimplementedError();
 
   @override
+  Future<void> update(Account account, {required String newName}) async {}
+
+  @override
   Future<void> delete(int id) async {}
 }
 

@@ -5,7 +5,6 @@ import '../../core/data/database.dart';
 import '../../core/data/enums.dart';
 import '../../core/data/repositories/account_repository.dart'
     show DuplicateNameException;
-import '../../core/data/repositories/category_repository.dart';
 import '../../core/di/providers.dart';
 import '../../core/validators/transaction_form_validators.dart';
 import 'category_appearance.dart';
@@ -24,8 +23,7 @@ class CategoryFormScreen extends ConsumerStatefulWidget {
   final Category? category;
 
   @override
-  ConsumerState<CategoryFormScreen> createState() =>
-      _CategoryFormScreenState();
+  ConsumerState<CategoryFormScreen> createState() => _CategoryFormScreenState();
 }
 
 class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
@@ -71,8 +69,7 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
     final colorHex = categoryColorHex(_color);
     try {
       if (_isEdit) {
-        // update() ada di concrete CategoryRepository (belum masuk interface).
-        await (repo as CategoryRepository).update(
+        await repo.update(
           widget.category!,
           newName: name,
           color: colorHex,
@@ -219,7 +216,9 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
                     child: CircleAvatar(
                       backgroundColor: _icon == entry.key
                           ? Theme.of(context).colorScheme.primaryContainer
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          : Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
                       child: Icon(entry.value, size: 20),
                     ),
                   ),

@@ -14,6 +14,7 @@ abstract interface class AccountsRepository {
     String currency,
     int openingBalance,
   });
+  Future<void> update(Account account, {required String newName});
   Future<void> delete(int id);
 }
 
@@ -25,6 +26,12 @@ abstract interface class CategoriesRepository {
   Future<Category> create({
     required String name,
     required CategoryType type,
+    String? color,
+    String? icon,
+  });
+  Future<void> update(
+    Category category, {
+    required String newName,
     String? color,
     String? icon,
   });
