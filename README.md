@@ -7,7 +7,9 @@ Aplikasi pencatat keuangan personal berbasis Flutter (Android first), terinspira
 [![Latest release](https://img.shields.io/github/v/release/sandacof003/vexpense?label=latest&color=blue)](https://github.com/sandacof003/vexpense/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/sandacof003/vexpense/total)](https://github.com/sandacof003/vexpense/releases)
 
-**➡️ [Download APK terbaru](https://github.com/sandacof003/vexpense/releases/latest)**
+**➡️ [Download APK terbaru](https://github.com/sandacof003/vexpense/releases/latest)** — `v0.1.0-alpha.3` (dashboard + daftar/filter/hapus transaksi + transfer)
+
+Link langsung: [v-expense-0.1.0-alpha.3.apk](https://github.com/sandacof003/vexpense/releases/download/v0.1.0-alpha.3/v-expense-0.1.0-alpha.3.apk) (54 MB)
 
 Cara install di Android:
 1. Buka halaman release di atas, download file `v-expense-*.apk`
@@ -15,6 +17,13 @@ Cara install di Android:
 3. Install & buka → onboarding pilih currency → dashboard
 
 > ⚠️ Build **pre-alpha** (belum semua fitur ada — lihat catatan release). APK di-sign dengan debug key, bukan buat Play Store.
+
+## Yang sudah jalan
+- Onboarding pilih currency default + dark mode Material 3
+- **Dashboard** (FE-03): total saldo gabungan multi-currency → IDR, income vs expense bulan berjalan, 5 transaksi terbaru, quick add
+- **Transaksi** (FE-04/05): tambah/edit/hapus, daftar + filter (tipe, akun, kategori, rentang tanggal) + search, transfer antar akun same-currency
+- **Akun & Kategori** (FE-06): kelola akun dan kategori
+- Belum ada: reports/chart (FE-07), import CSV dari UI (FE-08)
 
 ## Stack
 - Flutter 3.32 (Dart 3.8)
