@@ -3,6 +3,23 @@ import 'package:drift/drift.dart';
 import '../../../core/data/database.dart';
 import '../../../core/data/enums.dart';
 
+Future<void> _validateCategory(
+  AppDatabase db,
+  TransactionType type,
+  int? categoryId,
+) async {
+  if (categoryId == null) {
+    throw ArgumentError('Income/expense wajib punya kategori');
+  }
+  final category = await db.categoryDao.getById(categoryId);
+  final expected = type == TransactionType.income
+      ? CategoryType.income
+      : CategoryType.expense;
+  if (category == null || category.type != expected) {
+    throw ArgumentError('Kategori tidak sesuai tipe transaksi');
+  }
+}
+
 /// Use case: catat transaksi biasa (income / expense).
 ///
 /// Semua write dibungkus satu DB transaction (`AppDatabase.transaction`) supaya
@@ -27,7 +44,7 @@ class CreateTransactionUseCase {
     if (amount <= 0) {
       throw ArgumentError.value(amount, 'amount', 'harus > 0');
     }
-    // income/expense wajib kategori (selaras CHECK constraint di tabel).
+    await _validateCategory(_db, type, categoryId);
     return _db.transaction(() async {
       final id = await _db.transactionDao.insert(
         TransactionsCompanion.insert(
@@ -63,7 +80,7 @@ class EditTransactionUseCase {
       if (existing == null) {
         throw StateError('Transaksi #${updated.id} tidak ditemukan');
       }
-      _validate(updated);
+      await _validate(updated);
       await _db.transactionDao.replace(
         updated.copyWith(updatedAt: DateTime.now()),
       );
@@ -71,16 +88,14 @@ class EditTransactionUseCase {
     });
   }
 
-  void _validate(Transaction tx) {
+  Future<void> _validate(Transaction tx) async {
     if (tx.type == TransactionType.transfer) {
       throw ArgumentError('Transfer tidak diedit lewat use case ini (MVP)');
     }
     if (tx.amount <= 0) {
       throw ArgumentError.value(tx.amount, 'amount', 'harus > 0');
     }
-    if (tx.categoryId == null) {
-      throw ArgumentError('Income/expense wajib punya kategori');
-    }
+    await _validateCategory(_db, tx.type, tx.categoryId);
   }
 }
 
