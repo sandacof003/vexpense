@@ -15,6 +15,7 @@ import '../data/repositories/repository_contracts.dart';
 import '../data/repositories/transaction_repository.dart';
 import '../data/services/currency_converter.dart';
 import '../services/csv/csv_import_service.dart';
+import '../../features/reports/data/report_models.dart';
 import '../../features/reports/data/reports_repository.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -104,5 +105,22 @@ final categoriesProvider = StreamProvider.autoDispose<List<Category>>((ref) {
 final dashboardBalanceProvider = FutureProvider.autoDispose<BalanceSummary>((
   ref,
 ) {
+  // Refresh otomatis saat ledger berubah (stream transaksi emit).
+  ref.listen(transactionsProvider, (_, _) => ref.invalidateSelf());
   return ref.watch(dashboardRepositoryProvider).totalBalance('IDR');
 });
+
+/// Income vs expense bulan berjalan (IDR) untuk dashboard FE-03.
+/// Transfer dikecualikan; rate hilang → `isComplete=false` (BE-05).
+final dashboardMonthlyProvider =
+    FutureProvider.autoDispose<IncomeVsExpenseReport>((ref) {
+      ref.listen(transactionsProvider, (_, _) => ref.invalidateSelf());
+      final now = DateTime.now();
+      return ref.watch(reportsRepositoryProvider).incomeVsExpense(
+        from: DateTime(now.year, now.month),
+        to: DateTime(
+          now.year,
+          now.month + 1,
+        ).subtract(const Duration(microseconds: 1)),
+      );
+    });

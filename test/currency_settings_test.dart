@@ -1,8 +1,11 @@
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:v_expense/app/v_expense_app.dart';
+import 'package:v_expense/core/data/database.dart';
+import 'package:v_expense/core/di/providers.dart';
 import 'package:v_expense/core/settings/currency.dart';
 import 'package:v_expense/core/settings/settings_providers.dart';
 import 'package:v_expense/features/dashboard/dashboard_screen.dart';
@@ -13,7 +16,14 @@ Future<SharedPreferences> freshPrefs() {
 }
 
 Widget buildScope(SharedPreferences prefs) => ProviderScope(
-  overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+  overrides: [
+    sharedPreferencesProvider.overrideWithValue(prefs),
+    // Dashboard FE-03 membaca DB; pakai in-memory supaya tidak menyentuh
+    // path_provider (tidak tersedia di flutter_test).
+    appDatabaseProvider.overrideWithValue(
+      AppDatabase.forTesting(NativeDatabase.memory()),
+    ),
+  ],
   child: const VExpenseApp(),
 );
 
@@ -26,6 +36,15 @@ Future<void> tapCurrency(WidgetTester tester, String code) async {
     const Offset(0, -80),
   );
   await tester.tap(key);
+}
+
+/// Dashboard FE-03 membuka drift stream; bongkar tree lalu majukan clock
+/// supaya timer 0-delay drift ter-flush (pola transaction_form_test).
+Future<void> flushDashboardTimers(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox());
+  for (var i = 0; i < 3; i++) {
+    await tester.pump(const Duration(milliseconds: 1));
+  }
 }
 
 void main() {
@@ -55,6 +74,8 @@ void main() {
 
     expect(prefs.getString('settings.default_currency'), 'SGD');
     expect(find.text('Currency default: SGD'), findsOneWidget);
+
+    await flushDashboardTimers(tester);
   });
 
   testWidgets('skip onboarding tidak menulis currency; tetap tampil IDR', (
@@ -70,6 +91,8 @@ void main() {
     expect(prefs.getString('settings.default_currency'), isNull);
     expect(find.byType(DashboardScreen), findsOneWidget);
     expect(find.text('Currency default: IDR'), findsOneWidget);
+
+    await flushDashboardTimers(tester);
   });
 
   testWidgets('currency tersimpan bertahan setelah restart', (tester) async {
@@ -88,6 +111,8 @@ void main() {
 
     expect(find.byType(DashboardScreen), findsOneWidget);
     expect(find.text('Currency default: JPY'), findsOneWidget);
+
+    await flushDashboardTimers(tester);
   });
 
   test('fromCode fallback ke IDR untuk kode kosong/tidak dikenal', () {
