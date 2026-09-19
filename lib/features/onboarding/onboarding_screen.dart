@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/data/enums.dart';
+import '../../core/di/providers.dart';
 import '../../core/settings/currency.dart';
 import '../../core/settings/settings_providers.dart';
 
@@ -24,6 +26,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Future<void> _finish() async {
     await ref.read(defaultCurrencyProvider.notifier).select(_selected);
+    await _ensureDefaultAccount(_selected.code);
     await ref.read(onboardingCompletedProvider.notifier).complete();
     if (mounted) context.go('/dashboard');
   }
@@ -31,8 +34,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _skip() async {
     // Sengaja tidak memanggil select() — storage fallback ke IDR,
     // memenuhi acceptance "bernilai IDR bila tidak dipilih".
+    await _ensureDefaultAccount(AppCurrency.idr.code);
     await ref.read(onboardingCompletedProvider.notifier).complete();
     if (mounted) context.go('/dashboard');
+  }
+
+  Future<void> _ensureDefaultAccount(String currency) async {
+    final repository = ref.read(accountRepositoryProvider);
+    if ((await repository.getAll()).isEmpty) {
+      await repository.create(
+        name: 'Tunai',
+        type: AccountType.cash,
+        currency: currency,
+      );
+    }
   }
 
   @override
