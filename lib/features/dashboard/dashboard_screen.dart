@@ -11,6 +11,7 @@ import '../../core/formatters/money_formatter.dart';
 import '../../core/settings/settings_providers.dart';
 import '../accounts/accounts_screen.dart';
 import '../categories/categories_screen.dart';
+import '../reports/presentation/reports_screen.dart';
 import '../transactions/presentation/transaction_form_screen.dart';
 import '../transactions/presentation/transaction_list_screen.dart';
 
@@ -225,6 +226,12 @@ class DashboardScreen extends ConsumerWidget {
                 icon: const Icon(Icons.category_outlined),
                 label: const Text('Kelola Kategori'),
                 onPressed: () => context.push(CategoriesScreen.path),
+              ),
+              TextButton.icon(
+                key: const Key('dashboard.goto.reports'),
+                icon: const Icon(Icons.bar_chart_outlined),
+                label: const Text('Reports'),
+                onPressed: () => context.push(ReportsScreen.path),
               ),
             ],
           ),
