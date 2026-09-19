@@ -7,6 +7,7 @@ import '../../features/categories/categories_screen.dart';
 import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/reports/presentation/reports_screen.dart';
+import '../../features/settings/import_csv_screen.dart';
 import '../../features/transactions/presentation/transaction_list_screen.dart';
 import '../settings/settings_providers.dart';
 
@@ -56,6 +57,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: ReportsScreen.path,
         builder: (context, state) => const ReportsScreen(),
+      ),
+      GoRoute(
+        path: ImportCsvScreen.path,
+        builder: (context, state) => const ImportCsvScreen(),
       ),
     ],
   );
