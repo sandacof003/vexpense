@@ -7,11 +7,12 @@ import '../../core/formatters/currency_format.dart';
 import '../../core/formatters/money_formatter.dart';
 import 'account_form_screen.dart';
 
-/// List akun (cash / bank / e-wallet) + saldo awal minor unit.
+/// List akun (cash / bank / e-wallet) + **saldo berjalan**.
 ///
-/// Data live dari [accountsProvider] (stream repository). Saldo berjalan
-/// per transaksi tampil nanti di FE-03 dashboard; di sini cukup opening
-/// balance yang tersimpan di akun (acceptance FE-06).
+/// Saldo = `opening_balance + Σ income − Σ expense ± transfer` (PRD: ledger
+/// satu-satunya source of truth), bukan kolom `opening_balance` mentah —
+/// kalau yang ditampilkan opening balance, saldo tidak ikut turun saat ada
+/// transaksi dan lawan acceptance E2E-1.
 class AccountsScreen extends ConsumerWidget {
   const AccountsScreen({super.key});
 
@@ -19,7 +20,7 @@ class AccountsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final accounts = ref.watch(accountsProvider);
+    final accounts = ref.watch(accountBalancesProvider);
     final money = MoneyFormatter();
     final theme = Theme.of(context);
 
@@ -43,7 +44,7 @@ class AccountsScreen extends ConsumerWidget {
                   : ListView.builder(
                       itemCount: list.length,
                       itemBuilder: (context, index) {
-                        final account = list[index];
+                        final (account, balance) = list[index];
                         final currency = CurrencyFormat.fromCode(
                           account.currency,
                         );
@@ -55,7 +56,8 @@ class AccountsScreen extends ConsumerWidget {
                             '${account.type.name} · ${account.currency}',
                           ),
                           trailing: Text(
-                            money.format(account.openingBalance, currency),
+                            money.format(balance, currency),
+                            key: Key('accounts.balance.${account.id}'),
                             style: theme.textTheme.bodyMedium,
                           ),
                           onTap: () => Navigator.of(context).push(

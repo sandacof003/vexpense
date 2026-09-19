@@ -80,8 +80,23 @@ void main() {
       await pumpScreen(tester, const AccountsScreen());
 
       expect(find.text('BCA'), findsOneWidget);
+      // Belum ada transaksi → saldo berjalan == saldo awal.
       expect(find.text('Rp 1.500.000'), findsOneWidget);
       expect(find.byKey(const Key('accounts.restrict.hint')), findsOneWidget);
+    });
+
+    testWidgets('saldo akun = saldo awal + transaksi, bukan saldo awal saja', (
+      tester,
+    ) async {
+      final account = await seedAccount(name: 'BCA', openingBalance: 1000000);
+      await seedExpenseOn(account, amount: 250000);
+      await pumpScreen(tester, const AccountsScreen());
+
+      // Regresi: layar Akun sempat menampilkan `opening_balance` mentah,
+      // jadi saldo tidak ikut turun saat ada transaksi (lawan PRD: saldo =
+      // hasil hitung ledger, dan lawan acceptance E2E-1).
+      expect(find.text('Rp 750.000'), findsOneWidget);
+      expect(find.text('Rp 1.000.000'), findsNothing);
     });
 
     testWidgets('tambah akun IDR: opening balance tersimpan minor unit', (

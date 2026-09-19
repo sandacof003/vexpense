@@ -160,6 +160,32 @@ void main() {
     await settleDown(tester);
   });
 
+  testWidgets('edit saldo awal akun → total dashboard ikut berubah', (
+    tester,
+  ) async {
+    final acc = await seedAccount(name: 'Dompet', openingBalance: 100000);
+    await pumpDashboard(tester);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('dashboard.total'))).data,
+      'Rp 100.000',
+    );
+
+    // Regresi: `dashboardBalanceProvider` dulu cuma mendengarkan stream
+    // transaksi, jadi mengubah `opening_balance` (lewat form Akun) tidak
+    // menyegarkan total walau totalnya ikut bergantung ke data akun.
+    await container
+        .read(accountRepositoryProvider)
+        .update(acc.copyWith(openingBalance: 500000), newName: 'Dompet');
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('dashboard.total'))).data,
+      'Rp 500.000',
+    );
+
+    await settleDown(tester);
+  });
+
   testWidgets('akun tanpa rate IDR → state data belum lengkap', (
     tester,
   ) async {

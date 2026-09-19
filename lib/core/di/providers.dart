@@ -115,11 +115,32 @@ final categoriesProvider = StreamProvider.autoDispose<List<Category>>((ref) {
   return ref.watch(categoryRepositoryProvider).watchAll();
 });
 
+/// Akun + saldo berjalan (opening_balance + Σ income − Σ expense ± transfer).
+///
+/// PRD: saldo = hasil hitung ledger, bukan kolom tersimpan — jadi layar Akun
+/// wajib menampilkan angka ini, bukan `openingBalance` mentah.
+final accountBalancesProvider =
+    FutureProvider.autoDispose<List<(Account, int)>>((ref) async {
+      ref.listen(transactionsProvider, (_, _) => ref.invalidateSelf());
+      ref.listen(accountsProvider, (_, _) => ref.invalidateSelf());
+      final accounts = await ref.watch(accountsProvider.future);
+      final transactions = ref.watch(transactionRepositoryProvider);
+      // ponytail: 1 query saldo per akun (N+1) — cukup untuk belasan akun
+      // rumahan; ganti ke satu query GROUP BY kalau list akun jadi panjang.
+      return [
+        for (final account in accounts)
+          (account, await transactions.balanceForAccount(account.id)),
+      ];
+    });
+
 final dashboardBalanceProvider = FutureProvider.autoDispose<BalanceSummary>((
   ref,
 ) {
-  // Refresh otomatis saat ledger berubah (stream transaksi emit).
+  // Refresh saat ledger ATAU akun berubah: total saldo bergantung ke
+  // keduanya (transaksi, plus opening_balance & currency tiap akun).
+  // Tanpa listener akun, edit saldo awal tidak mengubah tampilan.
   ref.listen(transactionsProvider, (_, _) => ref.invalidateSelf());
+  ref.listen(accountsProvider, (_, _) => ref.invalidateSelf());
   return ref.watch(dashboardRepositoryProvider).totalBalance('IDR');
 });
 
