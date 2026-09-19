@@ -142,6 +142,20 @@ void main() {
       expect(await db.transactionDao.count(), 0);
     });
 
+    test('kategori beda tipe ditolak tanpa partial write', () async {
+      await expectLater(
+        createTx(
+          type: TransactionType.income,
+          amount: 100,
+          accountId: acc.id,
+          categoryId: expenseCat.id,
+          date: DateTime(2026, 1, 1),
+        ),
+        throwsArgumentError,
+      );
+      expect(await db.transactionDao.count(), 0);
+    });
+
     test('transfer via createTx ditolak', () async {
       await expectLater(
         createTx(
