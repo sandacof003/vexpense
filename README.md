@@ -23,13 +23,14 @@ Cara install di Android:
 - **Dashboard** (FE-03): total saldo gabungan multi-currency → IDR, income vs expense bulan berjalan, 5 transaksi terbaru, quick add
 - **Transaksi** (FE-04/05): tambah/edit/hapus, daftar + filter (tipe, akun, kategori, rentang tanggal) + search, transfer antar akun same-currency
 - **Akun & Kategori** (FE-06): kelola akun dan kategori
-- Belum ada: reports/chart (FE-07), import CSV dari UI (FE-08)
+- Belum ada: import CSV dari UI (FE-08)
 
 ## Stack
 - Flutter 3.32 (Dart 3.8)
 - Riverpod (state management)
 - Drift (SQLite ORM)
-- fl_chart (chart)
+- fl_chart 1.0.0 (chart — dipin; 1.1.0 tidak compile di Flutter 3.32)
+- file_picker (pilih file CSV)
 
 ## Struktur
 ```

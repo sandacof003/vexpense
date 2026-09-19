@@ -6,7 +6,8 @@ Semua agent yang kerja di folder ini WAJIB baca dulu `../AGENTS.md` (guardrail p
 - Flutter 3.32 / Dart 3.8, Android only (web/iOS nyusul)
 - State: **Riverpod** (flutter_riverpod + hooks opsional)
 - DB: **Drift** (SQLite ORM, `lib/core/data/`)
-- Chart: **fl_chart**
+- Chart: **fl_chart** (dipin `1.0.0` — versi 1.1.0 gagal compile di VPS ini: `Matrix4.translateByDouble` tidak ada di vector_math-2.1.4 yang dipin Flutter 3.32; jangan naikkan tanpa cek `flutter test` penuh)
+- File picker (import CSV): **file_picker**
 - Dark mode default, Material 3
 - `applicationId: com.sandacof003.vexpense`, `minSdk 26`
 
