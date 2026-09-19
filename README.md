@@ -7,9 +7,9 @@ Aplikasi pencatat keuangan personal berbasis Flutter (Android first), terinspira
 [![Latest release](https://img.shields.io/github/v/release/sandacof003/vexpense?label=latest&color=blue)](https://github.com/sandacof003/vexpense/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/sandacof003/vexpense/total)](https://github.com/sandacof003/vexpense/releases)
 
-**➡️ [Download APK terbaru](https://github.com/sandacof003/vexpense/releases/latest)** — `v0.1.0-alpha.3` (dashboard + daftar/filter/hapus transaksi + transfer)
+**➡️ [Download APK terbaru](https://github.com/sandacof003/vexpense/releases/latest)** — `v0.1.0-alpha.4` (reports + chart, import CSV)
 
-Link langsung: [v-expense-0.1.0-alpha.3.apk](https://github.com/sandacof003/vexpense/releases/download/v0.1.0-alpha.3/v-expense-0.1.0-alpha.3.apk) (54 MB)
+Link langsung: [v-expense-0.1.0-alpha.4.apk](https://github.com/sandacof003/vexpense/releases/download/v0.1.0-alpha.4/v-expense-0.1.0-alpha.4.apk) (55 MB)
 
 Cara install di Android:
 1. Buka halaman release di atas, download file `v-expense-*.apk`
