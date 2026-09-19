@@ -137,3 +137,66 @@ final dashboardMonthlyProvider =
         ).subtract(const Duration(microseconds: 1)),
       );
     });
+
+/// Rentang tanggal laporan aktif (from, to inklusif) — default bulan ini.
+/// Mengubah state ini memuat ulang kedua chart reports (FE-07).
+final reportsRangeProvider = StateProvider<(DateTime, DateTime)>((ref) =>
+    reportsPresets().values.first.toRange());
+
+/// Satu preset rentang tanggal laporan (FE-07). `to` = akhir hari terakhir.
+class ReportPreset {
+  const ReportPreset(this.label, this.from, this.to);
+
+  final String label;
+  final DateTime from;
+  final DateTime to;
+
+  (DateTime, DateTime) toRange() => (from, to);
+}
+
+/// Preset Bulan ini / 30 hari terakhir / Tahun ini. Dihitung dari tanggal
+/// saat ini; rentang inklusif sampai akhir hari.
+Map<String, ReportPreset> reportsPresets() {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  return {
+    'month': ReportPreset(
+      'Bulan ini',
+      DateTime(now.year, now.month),
+      DateTime(now.year, now.month + 1)
+          .subtract(const Duration(microseconds: 1)),
+    ),
+    'last30': ReportPreset(
+      '30 hari terakhir',
+      today.subtract(const Duration(days: 29)),
+      today
+          .add(const Duration(days: 1))
+          .subtract(const Duration(microseconds: 1)),
+    ),
+    'year': ReportPreset(
+      'Tahun ini',
+      DateTime(now.year),
+      DateTime(now.year + 1).subtract(const Duration(microseconds: 1)),
+    ),
+  };
+}
+
+/// Expense by Category (pie) untuk rentang aktif — FE-07.
+final expenseByCategoryProvider =
+    FutureProvider.autoDispose<ExpenseByCategoryReport>((ref) {
+      ref.listen(transactionsProvider, (_, _) => ref.invalidateSelf());
+      final (from, to) = ref.watch(reportsRangeProvider);
+      return ref
+          .watch(reportsRepositoryProvider)
+          .expenseByCategory(from: from, to: to);
+    });
+
+/// Income vs Expense (bar) untuk rentang aktif — FE-07.
+final incomeVsExpenseRangeProvider =
+    FutureProvider.autoDispose<IncomeVsExpenseReport>((ref) {
+      ref.listen(transactionsProvider, (_, _) => ref.invalidateSelf());
+      final (from, to) = ref.watch(reportsRangeProvider);
+      return ref
+          .watch(reportsRepositoryProvider)
+          .incomeVsExpense(from: from, to: to);
+    });
