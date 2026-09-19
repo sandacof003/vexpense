@@ -66,6 +66,7 @@ class AccountRepository implements AccountsRepository {
   }
 
   /// Update akun (termasuk ganti nama). Nama baru tidak boleh bentrok.
+  @override
   Future<void> update(Account account, {required String newName}) async {
     final existing = await _accountDao.getByName(newName);
     if (existing != null && existing.id != account.id) {

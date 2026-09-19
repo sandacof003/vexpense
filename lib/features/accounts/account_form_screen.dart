@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/data/database.dart';
 import '../../core/data/enums.dart';
-import '../../core/data/repositories/account_repository.dart';
+import '../../core/data/repositories/account_repository.dart'
+    show AccountInUseException, DuplicateNameException;
 import '../../core/di/providers.dart';
 import '../../core/formatters/currency_format.dart';
 import '../../core/formatters/money_formatter.dart';
@@ -87,9 +88,9 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
     });
     if (nameError != null || balance == null) {
       if (nameError != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(nameError)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(nameError)));
       }
       return;
     }
@@ -97,10 +98,7 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
     final repo = ref.read(accountRepositoryProvider);
     try {
       if (_isEdit) {
-        // update() ada di concrete AccountRepository (belum masuk interface
-        // BE). Cast di satu titik ini saja — provider selalu membangun tipe
-        // concrete tersebut (lihat core/di/providers.dart).
-        await (repo as AccountRepository).update(
+        await repo.update(
           widget.account!.copyWith(
             type: _type,
             currency: _currency.code,
@@ -138,9 +136,7 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Hapus akun?'),
-        content: Text(
-          'Akun "${widget.account!.name}" akan dihapus permanen.',
-        ),
+        content: Text('Akun "${widget.account!.name}" akan dihapus permanen.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -261,7 +257,8 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
               controller: _balanceController,
               currency: currencyFormat,
               labelText: 'Saldo awal',
-              helperText: 'Boleh 0. Disimpan sebagai minor unit ${_currency.code}.',
+              helperText:
+                  'Boleh 0. Disimpan sebagai minor unit ${_currency.code}.',
               errorText: _balanceError,
             ),
             const SizedBox(height: 24),
