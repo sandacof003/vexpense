@@ -74,6 +74,10 @@ void main() {
     expect(find.byType(OnboardingScreen), findsNothing);
     expect(find.byType(DashboardScreen), findsOneWidget);
 
+    await tester.tap(find.byKey(const Key('dashboard.quick.add')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('transaction.form.account')), findsOneWidget);
+
     await flushDashboardTimers(tester);
   });
 
