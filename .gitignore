@@ -19,3 +19,7 @@ android/app/debug/
 
 # Misc
 *.log
+
+# Python (tools/gen_app_icons.py)
+__pycache__/
+*.pyc
